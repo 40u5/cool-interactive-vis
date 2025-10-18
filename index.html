@@ -1076,6 +1076,28 @@
             document.getElementById('minBudgetValue').textContent = '0M';
             updateVisualizations(true);
         }
+		// Auto-load cleaned.csv if it exists in same folder
+		window.addEventListener('DOMContentLoaded', () => {
+			fetch('cleaned.csv')
+				.then(response => {
+					if (!response.ok) throw new Error('No cleaned.csv found');
+					return response.text();
+				})
+				.then(csvText => {
+					Papa.parse(csvText, {
+						header: true,
+						dynamicTyping: true,
+						skipEmptyLines: true,
+						complete: function(results) {
+							processData(results.data);
+						}
+					});
+				})
+				.catch(err => {
+					console.log('cleaned.csv not found, waiting for manual upload.');
+				});
+		});
+
     </script>
 </body>
 </html>
