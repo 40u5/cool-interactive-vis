@@ -20,18 +20,10 @@ function initializeFrontpage() {
     startAnimation();
     
     // Attach button listeners
-    const playBtn = document.getElementById('playGameBtn');
     const skipBtn = document.getElementById('skipBtn');
     
     if (skipBtn) {
         skipBtn.addEventListener('click', showDataVisualization);
-    }
-    
-    if (playBtn) {
-        playBtn.addEventListener('click', () => {
-            alert('Game coming soon! For now, showing data visualization.');
-            showDataVisualization();
-        });
     }
     
     // Press any key or click to skip animation (show buttons)
