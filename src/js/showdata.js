@@ -1,0 +1,859 @@
+// Global variables
+let rawData = [];
+let filteredData = [];
+let selectedGenre = null;
+let isAnimating = false;
+
+// Color scale for genres
+const colorScale = d3.scaleOrdinal()
+    .domain(['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western', 'Other'])
+    .range(d3.schemeCategory20 || ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d']);
+
+function processData(data) {
+    console.log('Processing', data.length, 'rows');
+    
+    // Clean and process data
+    rawData = data.filter(d => {
+        const budget = parseFloat(d.budget);
+        const revenue = parseFloat(d.revenue);
+        const runtime = parseFloat(d.runtime);
+        return !isNaN(budget) && !isNaN(revenue) && !isNaN(runtime) && 
+               budget > 0 && revenue > 0 && runtime > 0;
+    }).map(d => ({
+        id: d.id,
+        title: d.title || 'Unknown',
+        budget: parseFloat(d.budget),
+        revenue: parseFloat(d.revenue),
+        runtime: parseFloat(d.runtime),
+        genres: d.genres || 'Unknown',
+        genreList: (d.genres || 'Unknown').split(',').map(g => g.trim()).filter(g => g),
+        language: d.original_language || 'Unknown',
+        roi: ((parseFloat(d.revenue) - parseFloat(d.budget)) / parseFloat(d.budget)) * 100,
+        profit: parseFloat(d.revenue) - parseFloat(d.budget),
+        mainGenre: getMainGenre(d.genres || 'Unknown')
+    }));
+
+    console.log('Filtered to', rawData.length, 'valid movies');
+
+    if (rawData.length === 0) {
+        console.error('No valid data found in CSV');
+        return;
+    }
+
+    // Extract unique genres and languages
+    const genreSet = new Set();
+    const languageSet = new Set();
+    
+    rawData.forEach(d => {
+        d.genreList.forEach(g => {
+            if (g && g !== 'Unknown') genreSet.add(g);
+        });
+        if (d.language && d.language !== 'Unknown') languageSet.add(d.language);
+    });
+
+    // Populate genre filter
+    const genreFilter = document.getElementById('genreFilter');
+    genreFilter.innerHTML = '<option value="all">All Genres</option>';
+    Array.from(genreSet).sort().forEach(g => {
+        const option = document.createElement('option');
+        option.value = g;
+        option.textContent = g;
+        genreFilter.appendChild(option);
+    });
+
+    // Populate language filter
+    const languageFilter = document.getElementById('languageFilter');
+    languageFilter.innerHTML = '<option value="all">All Languages</option>';
+    Array.from(languageSet).sort().forEach(l => {
+        const option = document.createElement('option');
+        option.value = l;
+        option.textContent = l;
+        languageFilter.appendChild(option);
+    });
+
+    // Set up budget slider
+    const maxBudget = d3.max(rawData, d => d.budget);
+    const budgetSlider = document.getElementById('minBudget');
+    budgetSlider.min = MIN_SLIDER_BUDGET; // Ensure minimum is 0.1M
+    budgetSlider.max = maxBudget;
+    budgetSlider.value = MIN_SLIDER_BUDGET;
+
+    // Show controls and dashboard
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('dashboard').style.display = 'grid';
+
+    // Add event listeners
+    genreFilter.addEventListener('change', () => {
+        selectedGenre = null;
+        updateVisualizations(true);
+    });
+    languageFilter.addEventListener('change', () => updateVisualizations(true));
+    budgetSlider.addEventListener('input', function() {
+        const value = this.value / 1000000;
+        document.getElementById('minBudgetValue').textContent = value.toFixed(0) + 'M';
+        updateVisualizations(true);
+    });
+    document.getElementById('resetZoom').addEventListener('click', resetZoom);
+    document.getElementById('animateBtn').addEventListener('click', animateTimeline);
+
+    // Initial render
+    updateVisualizations(false);
+}
+
+function getMainGenre(genresString) {
+    if (!genresString) return 'Other';
+    const genres = genresString.split(',').map(g => g.trim()).filter(g => g);
+    if (genres.length === 0) return 'Other';
+    
+    // Priority order for main genres
+    const priorityGenres = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
+                           'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 
+                           'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western'];
+    
+    for (let priority of priorityGenres) {
+        if (genres.includes(priority)) return priority;
+    }
+    return genres[0] || 'Other';
+}
+
+function updateVisualizations(animate = true) {
+    const genreFilter = document.getElementById('genreFilter').value;
+    const languageFilter = document.getElementById('languageFilter').value;
+    const minBudget = parseFloat(document.getElementById('minBudget').value);
+
+    // Apply filters
+    filteredData = rawData.filter(d => {
+        // Genre filter - check if any genre in the list matches
+        const genreMatch = genreFilter === 'all' || d.genreList.includes(genreFilter) || 
+                         (selectedGenre && d.mainGenre === selectedGenre);
+        const languageMatch = languageFilter === 'all' || d.language === languageFilter;
+        const budgetMatch = d.budget >= minBudget;
+        return genreMatch && languageMatch && budgetMatch;
+    });
+
+    console.log('Filtered data:', filteredData.length, 'movies');
+
+    if (filteredData.length === 0) {
+        return;
+    }
+
+    // Update all visualizations with animation
+    updateScatterPlot(animate);
+    updateGenreChart(animate);
+    updateProfitChart(animate);
+}
+
+let zoom;
+let xScale, yScale, g;
+let lastValidTransform = null; // Track last valid zoom transform
+const MIN_LOG_VALUE = 1; // Smallest value allowed on log axes
+const MIN_SLIDER_BUDGET = 100000; // 0.1M minimum for slider filtering
+
+function formatCurrency(value) {
+    if (value >= 1000000) return '$' + (value / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (value >= 1000) return '$' + (value / 1000).toFixed(0) + 'K';
+    return '$' + value.toFixed(0);
+}
+
+function getLogTicks(domain) {
+    const [min, max] = domain;
+    const ticks = [];
+    const minPow = Math.floor(Math.log10(min));
+    const maxPow = Math.ceil(Math.log10(max));
+    const mantissas = [1, 2, 5];
+    
+    for (let pow = minPow; pow <= maxPow; pow++) {
+        mantissas.forEach(m => {
+            const value = m * Math.pow(10, pow);
+            if (value >= min && value <= max) {
+                ticks.push(value);
+            }
+        });
+    }
+
+    // Ensure min and max are included
+    if (!ticks.includes(min)) ticks.unshift(min);
+    if (!ticks.includes(max)) ticks.push(max);
+
+    return ticks;
+}
+
+function updateScatterPlot(animate = true) {
+    const svg = d3.select('#scatterPlot');
+    const container = svg.node().parentElement;
+    
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    
+    // Calculate available height: container - title - stats box - padding
+    const title = container.querySelector('.chart-title');
+    const titleHeight = title ? title.getBoundingClientRect().height : 35; // fallback estimate
+    const statsBoxHeight = 80; // Fixed estimate: 60px min-height + 10px margin-top + 10px padding
+    const containerPadding = 24; // 12px top + 12px bottom
+    
+    const availableHeight = rect.height - titleHeight - statsBoxHeight - containerPadding;
+    
+    if (availableHeight <= 0) return; // Not enough space
+    
+    // Remove all groups but preserve defs (for clip paths)
+    svg.selectAll('g').remove();
+    
+    const margin = {top: 20, right: 80, bottom: 60, left: 80};
+    const width = rect.width - margin.left - margin.right;
+    const height = Math.max(100, availableHeight - margin.top - margin.bottom); // Ensure minimum height
+
+    svg.attr('width', width + margin.left + margin.right)
+       .attr('height', height + margin.top + margin.bottom);
+
+    g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Create layers: background (axes, lines) and foreground (dots)
+    const backgroundLayer = g.append('g').attr('class', 'background-layer');
+    const foregroundLayer = g.append('g').attr('class', 'foreground-layer');
+    
+    // Add clip path to ensure dots only render within plot area
+    // Clip path coordinates are relative to the layer (which is already translated)
+    let defs = svg.select('defs');
+    if (defs.empty()) {
+        defs = svg.append('defs');
+    }
+    
+    let clipPath = defs.select('#plot-clip');
+    if (clipPath.empty()) {
+        clipPath = defs.append('clipPath').attr('id', 'plot-clip');
+    }
+    clipPath.select('rect').remove();
+    clipPath.append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', width)
+        .attr('height', height);
+    
+    foregroundLayer.attr('clip-path', 'url(#plot-clip)');
+
+    // Scales - use rawData so scales don't change when filtering
+    // For log scales, domain must be strictly positive and properly set
+    const budgetExtent = d3.extent(rawData, d => d.budget);
+    const revenueExtent = d3.extent(rawData, d => d.revenue);
+    
+    // Ensure minimum values are at least MIN_LOG_VALUE
+    const xExtentMin = budgetExtent[0] || MIN_LOG_VALUE;
+    const xExtentMax = budgetExtent[1] || xExtentMin * 10;
+    const xDomainMin = Math.max(MIN_LOG_VALUE, xExtentMin);
+    const xDomainMax = Math.max(xDomainMin * 1.01, xExtentMax); // avoid identical min/max
+    
+    // For log scales, set domain first, then nice() rounds to nice powers
+    xScale = d3.scaleLog()
+        .base(10)
+        .domain([xDomainMin, xDomainMax])
+        .range([0, width])
+        .nice();
+
+    // Revenue scale - ensure positive values
+    const yExtentMin = revenueExtent[0] || MIN_LOG_VALUE;
+    const yExtentMax = revenueExtent[1] || yExtentMin * 10;
+    const yDomainMin = Math.max(MIN_LOG_VALUE, yExtentMin); // Log scale needs > 0
+    const yDomainMax = Math.max(yDomainMin * 1.01, yExtentMax);
+    
+    yScale = d3.scaleLog()
+        .base(10)
+        .domain([yDomainMin, yDomainMax])
+        .range([height, 0])
+        .nice();
+
+    // Add zoom behavior with filter to prevent going below MIN_LOG_VALUE
+    zoom = d3.zoom()
+        .scaleExtent([0.5, 10])
+        .extent([[0, 0], [width, height]])
+        .filter(function(event) {
+            // Allow all events, we'll constrain in zoomed function
+            return true;
+        })
+        .on('zoom', zoomed);
+
+    svg.call(zoom);
+    
+    // Initialize last valid transform
+    lastValidTransform = d3.zoomIdentity;
+
+    // Axes - custom tick values for log scale to avoid clutter
+    const xTicks = getLogTicks(xScale.domain());
+    const yTicks = getLogTicks(yScale.domain());
+
+    const xAxis = d3.axisBottom(xScale)
+        .tickValues(xTicks)
+        .tickFormat(formatCurrency);
+    
+    const yAxis = d3.axisLeft(yScale)
+        .tickValues(yTicks)
+        .tickFormat(formatCurrency);
+
+    // Add axes to background layer
+    const xAxisG = backgroundLayer.append('g')
+        .attr('class', 'x-axis')
+        .attr('transform', `translate(0,${height})`)
+        .call(xAxis);
+
+    const yAxisG = backgroundLayer.append('g')
+        .attr('class', 'y-axis')
+        .call(yAxis);
+
+    // Axis labels
+    backgroundLayer.append('text')
+        .attr('class', 'axis-label')
+        .attr('x', width / 2)
+        .attr('y', height + 45)
+        .attr('text-anchor', 'middle')
+        .text('Budget (Log Scale)');
+
+    backgroundLayer.append('text')
+        .attr('class', 'axis-label')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -height / 2)
+        .attr('y', -60)
+        .attr('text-anchor', 'middle')
+        .text('Revenue (Log Scale)');
+
+    // Break-even line (y = x, where revenue = budget)
+    const xDomain = xScale.domain();
+    const yDomain = yScale.domain();
+    // Use the intersection of both domains for the line
+    const lineMin = Math.max(xDomain[0], yDomain[0]);
+    const lineMax = Math.min(xDomain[1], yDomain[1]);
+
+    backgroundLayer.append('line')
+        .attr('class', 'break-even-line')
+        .attr('x1', xScale(lineMin))
+        .attr('y1', yScale(lineMin))
+        .attr('x2', xScale(lineMax))
+        .attr('y2', yScale(lineMax))
+        .attr('stroke', '#95a5a6')
+        .attr('stroke-width', 2)
+        .attr('stroke-dasharray', '5,5')
+        .attr('opacity', 0.5);
+
+    // Break-even label positioned at the end of the line
+    const labelX = xScale(lineMax) - 10;
+    const labelY = yScale(lineMax) + 20;
+    backgroundLayer.append('text')
+        .attr('x', labelX)
+        .attr('y', labelY)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#95a5a6')
+        .style('font-size', '11px')
+        .text('Break-even line');
+
+    // Tooltip
+    const tooltip = d3.select('#tooltip');
+
+    // Dots container in foreground layer (renders on top)
+    const dotsContainer = foregroundLayer.append('g').attr('class', 'dots-container');
+
+    // Add dots
+    const dots = dotsContainer.selectAll('.dot')
+        .data(filteredData, d => d.id);
+
+    const dotsEnter = dots.enter()
+        .append('circle')
+        .attr('class', 'dot')
+        .attr('r', 0)
+        .attr('cx', d => xScale(d.budget))
+        .attr('cy', d => yScale(d.revenue))
+        .attr('fill', d => colorScale(d.mainGenre))
+        .attr('opacity', 0.6);
+
+    // Merge enter and update selections
+    const allDots = dotsEnter.merge(dots);
+
+    // Apply animation
+    if (animate) {
+        allDots.transition()
+            .duration(800)
+            .delay((d, i) => Math.min(i * 2, 500))
+            .attr('r', 4)
+            .attr('cx', d => xScale(d.budget))
+            .attr('cy', d => yScale(d.revenue))
+            .attr('fill', d => colorScale(d.mainGenre));
+    } else {
+        allDots.attr('r', 4);
+    }
+
+    // Add interactions
+    allDots
+        .on('mouseover', function(event, d) {
+            // Highlight dot
+            d3.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', 8)
+                .attr('opacity', 1);
+
+            // Show tooltip
+            tooltip.style('opacity', '1');
+            tooltip.html(`<strong>${d.title}</strong><br/>
+                Budget: $${(d.budget / 1000000).toFixed(1)}M<br/>
+                Revenue: $${(d.revenue / 1000000).toFixed(1)}M<br/>
+                ROI: ${d.roi.toFixed(1)}%<br/>
+                Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
+                Genres: ${d.genres}<br/>
+                Language: ${d.language}<br/>
+                Runtime: ${d.runtime} min`);
+            
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 10) + 'px');
+        })
+        .on('mouseout', function(event, d) {
+            d3.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', 4)
+                .attr('opacity', 0.6);
+
+            tooltip.style('opacity', '0');
+        })
+        .on('click', function(event, d) {
+            // Highlight similar genre movies
+            highlightGenre(d.mainGenre);
+        });
+
+    // Remove exit selection
+    dots.exit()
+        .transition()
+        .duration(500)
+        .attr('r', 0)
+        .remove();
+}
+
+function zoomed(event) {
+    const {transform} = event;
+    
+    // Update scales
+    let newXScale = transform.rescaleX(xScale);
+    const newYScale = transform.rescaleY(yScale);
+    
+    // Constrain axes to never go below MIN_LOG_VALUE (log scales can't handle <= 0)
+    const currentXDomain = newXScale.domain();
+    const currentYDomain = newYScale.domain();
+    
+    if (currentXDomain[0] < MIN_LOG_VALUE || currentYDomain[0] < MIN_LOG_VALUE) {
+        // Reject this transform - reset to last valid transform or identity
+        const svg = d3.select('#scatterPlot');
+        if (lastValidTransform) {
+            svg.call(zoom.transform, lastValidTransform);
+        } else {
+            svg.call(zoom.transform, d3.zoomIdentity);
+        }
+        return; // Exit early
+    }
+    
+    // This transform is valid - save it
+    lastValidTransform = transform;
+    
+    // Update axes - use same formatting as initial axes
+    const xTicks = getLogTicks(newXScale.domain());
+    const yTicks = getLogTicks(newYScale.domain());
+
+    g.select('.x-axis').call(d3.axisBottom(newXScale)
+        .tickValues(xTicks)
+        .tickFormat(formatCurrency));
+    
+    g.select('.y-axis').call(d3.axisLeft(newYScale)
+        .tickValues(yTicks)
+        .tickFormat(formatCurrency));
+    
+    // Update dots
+    g.selectAll('.dot')
+        .attr('cx', d => newXScale(d.budget))
+        .attr('cy', d => newYScale(d.revenue));
+    
+    // Update break-even line (y = x, where revenue = budget)
+    const newXDomain = newXScale.domain();
+    const newYDomain = newYScale.domain();
+    const lineMin = Math.max(newXDomain[0], newYDomain[0]);
+    const lineMax = Math.min(newXDomain[1], newYDomain[1]);
+    
+    g.select('.break-even-line')
+        .attr('x1', newXScale(lineMin))
+        .attr('y1', newYScale(lineMin))
+        .attr('x2', newXScale(lineMax))
+        .attr('y2', newYScale(lineMax));
+}
+
+function resetZoom() {
+    const svg = d3.select('#scatterPlot');
+    lastValidTransform = d3.zoomIdentity; // Reset tracked transform
+    svg.transition()
+        .duration(750)
+        .call(zoom.transform, d3.zoomIdentity);
+}
+
+function updateGenreChart(animate = true) {
+    const svg = d3.select('#genreChart');
+    const container = svg.node().parentElement;
+    
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    
+    svg.selectAll('*').remove();
+    
+    const margin = {top: 20, right: 20, bottom: 60, left: 60};
+    const width = rect.width - margin.left - margin.right;
+    const height = rect.height - margin.top - margin.bottom;
+
+    const g = svg.attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Calculate genre statistics
+    const genreData = d3.rollup(
+        filteredData,
+        v => ({
+            count: v.length,
+            avgROI: d3.mean(v, d => d.roi),
+            avgProfit: d3.mean(v, d => d.profit),
+            totalRevenue: d3.sum(v, d => d.revenue)
+        }),
+        d => d.mainGenre
+    );
+
+    const data = Array.from(genreData, ([genre, stats]) => ({
+        genre: genre,
+        avgROI: stats.avgROI,
+        count: stats.count,
+        avgProfit: stats.avgProfit
+    })).sort((a, b) => b.avgROI - a.avgROI).slice(0, 10);
+
+    // Scales
+    const xScale = d3.scaleBand()
+        .domain(data.map(d => d.genre))
+        .range([0, width])
+        .padding(0.2);
+
+    const yScale = d3.scaleLinear()
+        .domain([d3.min(data, d => d.avgROI) < 0 ? d3.min(data, d => d.avgROI) : 0, 
+                d3.max(data, d => d.avgROI)])
+        .range([height, 0])
+        .nice();
+
+    // Axes
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .style('font-size', '10px')
+        .attr('transform', 'rotate(-45)')
+        .attr('text-anchor', 'end');
+
+    g.append('g')
+        .call(d3.axisLeft(yScale).ticks(5))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Axis label
+    g.append('text')
+        .attr('class', 'axis-label')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -height / 2)
+        .attr('y', -45)
+        .attr('text-anchor', 'middle')
+        .text('Average ROI (%)');
+
+    // Zero line if needed
+    if (d3.min(data, d => d.avgROI) < 0) {
+        g.append('line')
+            .attr('x1', 0)
+            .attr('y1', yScale(0))
+            .attr('x2', width)
+            .attr('y2', yScale(0))
+            .attr('stroke', '#333')
+            .attr('stroke-width', 1);
+    }
+
+    const tooltip = d3.select('#tooltip');
+
+    // Bars
+    const bars = g.selectAll('.bar')
+        .data(data);
+
+    const barsEnter = bars.enter()
+        .append('rect')
+        .attr('class', 'bar')
+        .attr('x', d => xScale(d.genre))
+        .attr('y', d => d.avgROI >= 0 ? height : yScale(d.avgROI))
+        .attr('width', xScale.bandwidth())
+        .attr('height', 0)
+        .attr('fill', d => colorScale(d.genre));
+
+    if (animate) {
+        barsEnter.transition()
+            .duration(800)
+            .delay((d, i) => i * 50)
+            .attr('y', d => d.avgROI >= 0 ? yScale(d.avgROI) : yScale(0))
+            .attr('height', d => Math.abs(yScale(d.avgROI) - yScale(0)));
+    } else {
+        barsEnter
+            .attr('y', d => d.avgROI >= 0 ? yScale(d.avgROI) : yScale(0))
+            .attr('height', d => Math.abs(yScale(d.avgROI) - yScale(0)));
+    }
+
+    // Add interactions
+    barsEnter
+        .on('mouseover', function(event, d) {
+            tooltip.style('opacity', '1');
+            tooltip.html(`<strong>${d.genre}</strong><br/>
+                Avg ROI: ${d.avgROI.toFixed(1)}%<br/>
+                Avg Profit: $${(d.avgProfit / 1000000).toFixed(1)}M<br/>
+                Movies: ${d.count}`);
+            tooltip.style('left', (event.pageX + 10) + 'px')
+                   .style('top', (event.pageY - 10) + 'px');
+        })
+        .on('mouseout', function() {
+            tooltip.style('opacity', '0');
+        })
+        .on('click', function(event, d) {
+            // Toggle genre selection
+            if (selectedGenre === d.genre) {
+                selectedGenre = null;
+                d3.selectAll('.bar').classed('selected', false);
+            } else {
+                selectedGenre = d.genre;
+                d3.selectAll('.bar').classed('selected', false);
+                d3.select(this).classed('selected', true);
+            }
+            highlightGenre(selectedGenre);
+        });
+}
+
+function highlightGenre(genre) {
+    if (!genre) {
+        // Remove all highlights
+        d3.selectAll('.dot')
+            .classed('highlighted', false)
+            .classed('dimmed', false)
+            .transition()
+            .duration(300)
+            .attr('opacity', 0.6);
+    } else {
+        // Highlight matching genre
+        d3.selectAll('.dot')
+            .classed('highlighted', d => d.mainGenre === genre)
+            .classed('dimmed', d => d.mainGenre !== genre)
+            .transition()
+            .duration(300)
+            .attr('opacity', d => d.mainGenre === genre ? 1 : 0.2);
+    }
+}
+
+function updateProfitChart(animate = true) {
+    const svg = d3.select('#profitChart');
+    const container = svg.node().parentElement;
+    
+    if (!container) return;
+    
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    
+    svg.selectAll('*').remove();
+    
+    const margin = {top: 20, right: 20, bottom: 50, left: 60};
+    const width = rect.width - margin.left - margin.right;
+    const height = rect.height - margin.top - margin.bottom;
+
+    const g = svg.attr('width', width + margin.left + margin.right)
+        .attr('height', height + margin.top + margin.bottom)
+        .append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Calculate profit distribution
+    const profitable = filteredData.filter(d => d.profit > 0).length;
+    const unprofitable = filteredData.filter(d => d.profit <= 0).length;
+    
+    const data = [
+        {category: 'Profitable', count: profitable, color: '#27ae60'},
+        {category: 'Loss', count: unprofitable, color: '#e74c3c'}
+    ];
+
+    // Scales
+    const xScale = d3.scaleBand()
+        .domain(data.map(d => d.category))
+        .range([0, width])
+        .padding(0.3);
+
+    const yScale = d3.scaleLinear()
+        .domain([0, d3.max(data, d => d.count)])
+        .range([height, 0])
+        .nice();
+
+    // Axes
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(xScale))
+        .selectAll('text')
+        .style('font-size', '12px');
+
+    g.append('g')
+        .call(d3.axisLeft(yScale).ticks(5))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Bars
+    const bars = g.selectAll('.bar')
+        .data(data)
+        .enter()
+        .append('rect')
+        .attr('class', 'bar')
+        .attr('x', d => xScale(d.category))
+        .attr('y', height)
+        .attr('width', xScale.bandwidth())
+        .attr('height', 0)
+        .attr('fill', d => d.color);
+
+    if (animate) {
+        bars.transition()
+            .duration(800)
+            .attr('y', d => yScale(d.count))
+            .attr('height', d => height - yScale(d.count));
+    } else {
+        bars.attr('y', d => yScale(d.count))
+            .attr('height', d => height - yScale(d.count));
+    }
+
+    // Add value labels on bars
+    g.selectAll('.bar-label')
+        .data(data)
+        .enter()
+        .append('text')
+        .attr('class', 'bar-label')
+        .attr('x', d => xScale(d.category) + xScale.bandwidth() / 2)
+        .attr('y', d => yScale(d.count) - 5)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '14px')
+        .style('font-weight', 'bold')
+        .text(d => d.count)
+        .style('opacity', 0);
+
+    if (animate) {
+        g.selectAll('.bar-label')
+            .transition()
+            .delay(800)
+            .duration(300)
+            .style('opacity', 1);
+    } else {
+        g.selectAll('.bar-label').style('opacity', 1);
+    }
+
+    // Update stats box
+    const avgROI = d3.mean(filteredData, d => d.roi);
+    const avgBudget = d3.mean(filteredData, d => d.budget);
+    const avgRevenue = d3.mean(filteredData, d => d.revenue);
+    const successRate = (profitable / filteredData.length) * 100;
+
+    document.getElementById('statsBox').innerHTML = 
+        `<div class="stat">
+            <div>Average ROI</div>
+            <div class="stat-value">${avgROI.toFixed(1)}%</div>
+        </div>
+        <div class="stat">
+            <div>Avg Budget</div>
+            <div class="stat-value">$${(avgBudget / 1000000).toFixed(1)}M</div>
+        </div>
+        <div class="stat">
+            <div>Success Rate</div>
+            <div class="stat-value">${successRate.toFixed(1)}%</div>
+        </div>`;
+}
+
+function animateTimeline() {
+    if (isAnimating) return;
+    
+    isAnimating = true;
+    const btn = document.getElementById('animateBtn');
+    btn.textContent = 'Stop Animation';
+    btn.onclick = stopAnimation;
+    
+    // Group data by budget ranges and animate through them
+    const budgetRanges = [0, 1000000, 5000000, 10000000, 25000000, 50000000, 100000000, 200000000];
+    let currentRange = 0;
+    
+    function animateRange() {
+        if (!isAnimating || currentRange >= budgetRanges.length - 1) {
+            stopAnimation();
+            return;
+        }
+        
+        const slider = document.getElementById('minBudget');
+        const maxBudget = budgetRanges[currentRange + 1];
+        
+        // Animate slider
+        slider.value = budgetRanges[currentRange];
+        document.getElementById('minBudgetValue').textContent = 
+            (budgetRanges[currentRange] / 1000000).toFixed(0) + 'M';
+        
+        // Filter to show only movies in current range
+        filteredData = rawData.filter(d => 
+            d.budget >= budgetRanges[currentRange] && 
+            d.budget < maxBudget
+        );
+        
+        // Update visualizations with animation
+        if (filteredData.length > 0) {
+            updateScatterPlot(true);
+            updateGenreChart(true);
+            updateProfitChart(true);
+        }
+        
+        currentRange++;
+        setTimeout(animateRange, 2000);
+    }
+    
+    animateRange();
+}
+
+function stopAnimation() {
+    isAnimating = false;
+    const btn = document.getElementById('animateBtn');
+    btn.textContent = 'Play Timeline';
+    btn.onclick = animateTimeline;
+    
+    // Reset to show all data
+    document.getElementById('minBudget').value = MIN_SLIDER_BUDGET;
+    document.getElementById('minBudgetValue').textContent = '0.1M';
+    updateVisualizations(true);
+}
+
+// Auto-load cleaned.csv when data visualization is shown
+function autoLoadData() {
+    const dataViz = document.getElementById('dataVisualization');
+    if (!dataViz || dataViz.style.display === 'none') {
+        return; // Don't load if not visible
+    }
+    
+    fetch('cleaned.csv')
+        .then(response => {
+            if (!response.ok) throw new Error('No cleaned.csv found');
+            return response.text();
+        })
+        .then(csvText => {
+            Papa.parse(csvText, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    processData(results.data);
+                }
+            });
+        })
+        .catch(err => {
+            console.log('cleaned.csv not found, waiting for manual upload.');
+        });
+}
+
+// Expose autoLoadData globally so frontpage.js can call it
+window.autoLoadData = autoLoadData;
+
