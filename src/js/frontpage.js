@@ -12,9 +12,10 @@ function initializeFrontpage() {
         return;
     }
     
-    // Show frontpage, hide data viz
-    frontpage.style.display = 'flex';
-    dataViz.style.display = 'none';
+    // Only initialize if we're on the home route
+    if (window.location.pathname !== '/' && window.location.pathname !== '') {
+        return;
+    }
     
     // Start animation sequence
     startAnimation();
@@ -77,24 +78,73 @@ function skipAnimation() {
 }
 
 function showDataVisualization() {
+    // Navigate to /data route
+    window.history.pushState({ page: 'data' }, 'Data Visualization', '/data');
+    updateView();
+}
+
+function showFrontpage() {
+    // Navigate to / route
+    window.history.pushState({ page: 'home' }, 'Home', '/');
+    updateView();
+}
+
+function updateView() {
+    const path = window.location.pathname;
     const frontpage = document.getElementById('frontpage');
     const dataViz = document.getElementById('dataVisualization');
     
-    if (frontpage) {
-        frontpage.style.display = 'none';
-    }
-    
-    if (dataViz) {
-        dataViz.style.display = 'block';
-        // Wait a moment for layout, then load data
-        setTimeout(() => {
-            if (window.autoLoadData) {
-                window.autoLoadData();
+    if (path === '/data') {
+        // Show data visualization
+        if (frontpage) {
+            frontpage.style.display = 'none';
+        }
+        
+        if (dataViz) {
+            dataViz.style.display = 'block';
+            // Wait a moment for layout, then load data
+            setTimeout(() => {
+                if (window.autoLoadData) {
+                    window.autoLoadData();
+                }
+            }, 100);
+        }
+    } else {
+        // Show frontpage
+        if (dataViz) {
+            dataViz.style.display = 'none';
+        }
+        
+        if (frontpage) {
+            frontpage.style.display = 'flex';
+            // Restart animation if needed
+            if (!frontpage.querySelector('.button-container.show')) {
+                startAnimation();
             }
-        }, 100);
+        }
     }
 }
 
+// Handle browser back/forward buttons
+window.addEventListener('popstate', updateView);
+
 // Initialize on page load
-window.addEventListener('DOMContentLoaded', initializeFrontpage);
+window.addEventListener('DOMContentLoaded', () => {
+    // Check current route and show appropriate view
+    updateView();
+    
+    // If on home page, initialize frontpage
+    if (window.location.pathname === '/' || window.location.pathname === '') {
+        initializeFrontpage();
+    }
+    
+    // Handle back button click
+    const backBtn = document.getElementById('backToHome');
+    if (backBtn) {
+        backBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showFrontpage();
+        });
+    }
+});
 
