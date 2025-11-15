@@ -473,6 +473,274 @@
                 font-size: 1em;
             }
         }
+
+        /* Quiz Page Styles */
+        #quizPage {
+            min-height: 100vh;
+            max-height: 100vh;
+            overflow-y: auto;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .quiz-container {
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .quiz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .quiz-header h1 {
+            color: white;
+            font-size: 1.8em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .back-btn {
+            padding: 8px 18px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 20px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .back-btn:hover {
+            background: white;
+            color: #667eea;
+        }
+
+        .quiz-content {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 25px;
+            align-items: start;
+        }
+
+        .movie-poster-container {
+            text-align: center;
+        }
+
+        .movie-poster {
+            max-width: 200px;
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .movie-poster:hover {
+            transform: scale(1.05);
+        }
+
+        .quiz-main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .movie-info {
+            text-align: left;
+        }
+
+        .movie-info h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin: 0 0 5px 0;
+        }
+
+        .movie-info p {
+            color: #666;
+            font-size: 0.95em;
+            margin: 2px 0;
+        }
+
+        .quiz-question {
+            text-align: left;
+            margin: 5px 0;
+        }
+
+        .quiz-question p {
+            font-size: 1.2em;
+            color: #555;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .quiz-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .quiz-option {
+            padding: 15px;
+            border: 3px solid transparent;
+            border-radius: 12px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .quiz-option .option-desc {
+            display: block;
+            font-size: 0.75em;
+            font-weight: 400;
+            margin-top: 3px;
+            opacity: 0.8;
+        }
+
+        .quiz-option.blockbuster {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .quiz-option.pretty-good {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .quiz-option.broke-even {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+
+        .quiz-option.failed {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: #333;
+        }
+
+        .quiz-option.money-dumpster {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+
+        .quiz-option:hover:not(:disabled) {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .quiz-option:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .quiz-option.correct {
+            border-color: #2ecc71;
+            box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+            animation: pulse 0.5s ease;
+        }
+
+        .quiz-option.incorrect {
+            border-color: #e74c3c;
+            box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+            animation: shake 0.5s ease;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .result-container {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            color: white;
+        }
+
+        .result-message {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .result-details {
+            font-size: 1em;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .next-btn {
+            padding: 10px 30px;
+            background: white;
+            color: #667eea;
+            border: none;
+            border-radius: 20px;
+            font-size: 1em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .next-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        }
+
+        .quiz-stats {
+            text-align: center;
+            margin-top: 15px;
+            color: white;
+        }
+
+        .quiz-stats .stat {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .quiz-stats .stat-label {
+            margin-right: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .quiz-content {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+
+            .movie-poster {
+                max-width: 150px;
+            }
+
+            .quiz-buttons {
+                grid-template-columns: 1fr;
+            }
+
+            .quiz-header h1 {
+                font-size: 1.5em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -484,6 +752,9 @@
             <h1 class="animate-text" id="text3">Money Dumpster</h1>
         </div>
         <div class="button-container" id="frontpageButtons">
+            <button class="frontpage-btn secondary-btn" id="quizBtn">
+                Quiz Me 🎯
+            </button>
             <button class="frontpage-btn primary-btn" id="skipBtn">
                 Take me to the data →
             </button>
@@ -561,9 +832,75 @@
     </div>
     <!-- End Data Visualization -->
 
+    <!-- Quiz Page -->
+    <div id="quizPage" style="display: none;">
+        <div class="quiz-container">
+            <div class="quiz-header">
+                <h1>🎬 Blockbuster or Money Dumpster?</h1>
+                <button class="back-btn" id="backToHomeBtn">← Back to Home</button>
+            </div>
+            
+            <div class="quiz-content" id="quizContent">
+                <div class="movie-poster-container">
+                    <img id="moviePoster" src="" alt="Movie Poster" class="movie-poster">
+                </div>
+                
+                <div class="quiz-main-content">
+                    <div class="movie-info">
+                        <h2 id="movieTitle"></h2>
+                        <p id="movieDate"></p>
+                        <p id="movieBudget" style="font-size: 1.2em; font-weight: 700; color: #667eea; margin-top: 5px;"></p>
+                    </div>
+                    
+                    <div class="quiz-question">
+                        <p>What was the return on investment?</p>
+                    </div>
+                    
+                    <div class="quiz-buttons" id="quizButtons">
+                        <button class="quiz-option blockbuster" data-answer="blockbuster">
+                            🚀 Blockbuster
+                            <span class="option-desc">&gt;30% profit</span>
+                        </button>
+                        <button class="quiz-option pretty-good" data-answer="pretty-good">
+                            😊 Pretty Good
+                            <span class="option-desc">10-30% profit</span>
+                        </button>
+                        <button class="quiz-option broke-even" data-answer="broke-even">
+                            📊 Basically Broke Even
+                            <span class="option-desc">0-10% profit</span>
+                        </button>
+                        <button class="quiz-option failed" data-answer="failed">
+                            😬 Failed Investment
+                            <span class="option-desc">0% to -10% loss</span>
+                        </button>
+                        <button class="quiz-option money-dumpster" data-answer="dumpster">
+                            💸 Money Dumpster
+                            <span class="option-desc">&lt;-10% loss</span>
+                        </button>
+                    </div>
+                    
+                    <div class="result-container" id="resultContainer" style="display: none;">
+                        <div class="result-message" id="resultMessage"></div>
+                        <div class="result-details" id="resultDetails"></div>
+                        <button class="next-btn" id="nextBtn">Next Question →</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quiz-stats">
+                <div class="stat">
+                    <span class="stat-label">Score:</span>
+                    <span class="stat-value" id="quizScore">0/0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- End Quiz Page -->
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="src/js/frontpage.js"></script>
     <script src="src/js/showdata.js"></script>
+    <script src="src/js/quiz.js"></script>
 </body>
 </html>

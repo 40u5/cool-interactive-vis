@@ -21,9 +21,17 @@ function initializeFrontpage() {
     
     // Attach button listeners
     const skipBtn = document.getElementById('skipBtn');
+    const quizBtn = document.getElementById('quizBtn');
     
     if (skipBtn) {
         skipBtn.addEventListener('click', showDataVisualization);
+    }
+    
+    if (quizBtn) {
+        quizBtn.addEventListener('click', () => {
+            window.location.hash = '#/quiz';
+            updateView();
+        });
     }
     
     // Press any key or click to skip animation (show buttons)
@@ -88,11 +96,24 @@ function updateView() {
     const path = hash === '' ? '/' : hash;
     const frontpage = document.getElementById('frontpage');
     const dataViz = document.getElementById('dataVisualization');
+    const quizPage = document.getElementById('quizPage');
     
-    // Check if path is /data or contains /data
-    if (path === '#/data' || path.includes('/data')) {
+    // Check if path is /quiz
+    if (path === '#/quiz' || path.includes('/quiz')) {
+        // Show quiz page
+        if (frontpage) frontpage.style.display = 'none';
+        if (dataViz) dataViz.style.display = 'none';
+        if (quizPage) {
+            quizPage.style.display = 'block';
+            // Initialize quiz
+            if (window.initializeQuiz) {
+                setTimeout(() => window.initializeQuiz(), 100);
+            }
+        }
+    } else if (path === '#/data' || path.includes('/data')) {
         // Show data page
         if (frontpage) frontpage.style.display = 'none';
+        if (quizPage) quizPage.style.display = 'none';
         if (dataViz) {
             dataViz.style.display = 'block';
             setTimeout(() => {
@@ -102,6 +123,7 @@ function updateView() {
     } else {
         // Show main page
         if (dataViz) dataViz.style.display = 'none';
+        if (quizPage) quizPage.style.display = 'none';
         if (frontpage) {
             frontpage.style.display = 'flex';
             if (!frontpage.querySelector('.button-container.show')) {

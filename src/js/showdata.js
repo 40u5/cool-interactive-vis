@@ -478,7 +478,7 @@ function updateVisualizations(animate = true) {
     });
 
     console.log('Filtered data:', filteredData.length, 'movies');
-    
+
     // Update sample size slider max value based on filtered data
     const sampleSlider = document.getElementById('sampleSize');
     const sampleValue = document.getElementById('sampleSizeValue');
@@ -1069,9 +1069,9 @@ function updateGenreChart(animate = true) {
         }
         
         return {
-            genre: genre,
+        genre: genre,
             avgROI: avgROI,
-            count: stats.count,
+        count: stats.count,
             avgProfit: avgProfit
         };
     })
@@ -1132,7 +1132,7 @@ function updateGenreChart(animate = true) {
     if (yDomainMin >= yDomainMax) {
         yDomainMax = yDomainMin + 1;
     }
-    
+
     const yScale = d3.scaleLinear()
         .domain([yDomainMin, yDomainMax])
         .range([xAxisYPosition, 0]) // Use the adjusted x-axis position for proper alignment
@@ -1196,7 +1196,7 @@ function updateGenreChart(animate = true) {
 
     // Calculate zero line position on the y-axis
     const zeroY = yScale(0);
-    
+
     const barsEnter = bars.enter()
         .append('rect')
         .attr('class', 'bar')
