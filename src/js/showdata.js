@@ -3,6 +3,8 @@ let rawData = [];
 let filteredData = [];
 let selectedGenre = null;
 let isAnimating = false;
+let dataLoading = false; // Flag to prevent duplicate loads
+let dataLoaded = false; // Flag to track if data has been loaded
 
 // Global color scale for genres - will be initialized dynamically
 let colorScale;
@@ -422,8 +424,16 @@ function processData(data) {
         updateVisualizations(true);
     });
     
-    document.getElementById('resetZoom').addEventListener('click', resetZoom);
-    document.getElementById('animateBtn').addEventListener('click', animateTimeline);
+    const resetZoomBtn = document.getElementById('resetZoom');
+    if (resetZoomBtn) {
+        resetZoomBtn.addEventListener('click', resetZoom);
+    }
+    
+    // animateBtn was removed from HTML, so skip if it doesn't exist
+    const animateBtn = document.getElementById('animateBtn');
+    if (animateBtn) {
+        animateBtn.addEventListener('click', animateTimeline);
+    }
 
     // Initial render
     updateVisualizations(false);
@@ -1633,23 +1643,57 @@ function autoLoadData() {
         return; // Don't load if not visible
     }
     
+    // Prevent duplicate loads
+    if (dataLoaded || dataLoading) {
+        return;
+    }
+    
+    dataLoading = true;
+    
     fetch('cleaned.csv?t=' + Date.now())
         .then(response => {
             if (!response.ok) throw new Error('No cleaned.csv found');
             return response.text();
         })
         .then(csvText => {
-            Papa.parse(csvText, {
-                header: true,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    processData(results.data);
+            try {
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        try {
+                            processData(results.data);
+                            dataLoaded = true;
+                            dataLoading = false;
+                        } catch (err) {
+                            console.error('Error processing data:', err);
+                            dataLoading = false;
+                        }
+                    },
+                    error: function(err) {
+                        console.error('Error parsing CSV:', err);
+                        dataLoading = false;
+                        if (!dataLoaded) {
+                            console.log('cleaned.csv could not be parsed.');
+                        }
+                    }
+                });
+            } catch (err) {
+                console.error('Error in Papa.parse:', err);
+                dataLoading = false;
+                if (!dataLoaded) {
+                    console.log('cleaned.csv parsing failed.');
                 }
-            });
+            }
         })
         .catch(err => {
-            console.log('cleaned.csv not found, waiting for manual upload.');
+            dataLoading = false;
+            // Only log error if we haven't successfully loaded data before
+            // (Data might already be loaded from a previous successful call)
+            if (!dataLoaded && rawData.length === 0) {
+                console.log('cleaned.csv not found, waiting for manual upload.');
+            }
         });
 }
 
