@@ -7,6 +7,111 @@ let isAnimating = false;
 // Global color scale for genres - will be initialized dynamically
 let colorScale;
 
+// Language code to full name mapping (ISO 639-1)
+const languageNames = {
+    'ab': 'Abkhazian',
+    'af': 'Afrikaans',
+    'am': 'Amharic',
+    'ar': 'Arabic',
+    'ay': 'Aymara',
+    'bg': 'Bulgarian',
+    'bm': 'Bambara',
+    'bn': 'Bengali',
+    'bo': 'Tibetan',
+    'bs': 'Bosnian',
+    'ca': 'Catalan',
+    'cn': 'Cantonese',
+    'cs': 'Czech',
+    'cy': 'Welsh',
+    'da': 'Danish',
+    'de': 'German',
+    'el': 'Greek',
+    'en': 'English',
+    'eo': 'Esperanto',
+    'es': 'Spanish',
+    'et': 'Estonian',
+    'eu': 'Basque',
+    'fa': 'Persian',
+    'fi': 'Finnish',
+    'fr': 'French',
+    'fy': 'Western Frisian',
+    'gl': 'Galician',
+    'he': 'Hebrew',
+    'hi': 'Hindi',
+    'hr': 'Croatian',
+    'hu': 'Hungarian',
+    'hy': 'Armenian',
+    'id': 'Indonesian',
+    'is': 'Icelandic',
+    'it': 'Italian',
+    'iu': 'Inuktitut',
+    'ja': 'Japanese',
+    'jv': 'Javanese',
+    'ka': 'Georgian',
+    'kk': 'Kazakh',
+    'kn': 'Kannada',
+    'ko': 'Korean',
+    'ku': 'Kurdish',
+    'ky': 'Kyrgyz',
+    'la': 'Latin',
+    'lb': 'Luxembourgish',
+    'lo': 'Lao',
+    'lt': 'Lithuanian',
+    'lv': 'Latvian',
+    'mk': 'Macedonian',
+    'ml': 'Malayalam',
+    'mn': 'Mongolian',
+    'mr': 'Marathi',
+    'ms': 'Malay',
+    'mt': 'Maltese',
+    'nb': 'Norwegian Bokmål',
+    'ne': 'Nepali',
+    'nl': 'Dutch',
+    'no': 'Norwegian',
+    'pa': 'Punjabi',
+    'pl': 'Polish',
+    'ps': 'Pashto',
+    'pt': 'Portuguese',
+    'qu': 'Quechua',
+    'ro': 'Romanian',
+    'ru': 'Russian',
+    'rw': 'Kinyarwanda',
+    'sh': 'Serbo-Croatian',
+    'si': 'Sinhala',
+    'sk': 'Slovak',
+    'sl': 'Slovenian',
+    'sm': 'Samoan',
+    'sq': 'Albanian',
+    'sr': 'Serbian',
+    'sv': 'Swedish',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'tg': 'Tajik',
+    'th': 'Thai',
+    'tl': 'Tagalog',
+    'tr': 'Turkish',
+    'uk': 'Ukrainian',
+    'ur': 'Urdu',
+    'uz': 'Uzbek',
+    'vi': 'Vietnamese',
+    'wo': 'Wolof',
+    'xx': 'No Language',
+    'zh': 'Chinese',
+    'zu': 'Zulu'
+};
+
+/**
+ * Get full language name from ISO 639-1 code
+ * @param {string} code - ISO 639-1 language code
+ * @returns {string} Full language name or the code if not found
+ */
+function getLanguageName(code) {
+    if (!code || code === 'Unknown') return 'Unknown';
+    // Handle numeric values that might appear in the data
+    if (!isNaN(code)) return code;
+    return languageNames[code.toLowerCase()] || code.toUpperCase();
+}
+
 // Default color palette for genres
 const genreColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5', '#ff9896', '#c5b0d5'];
 
@@ -138,10 +243,15 @@ function processData(data) {
     // Populate language filter
     const languageFilter = document.getElementById('languageFilter');
     languageFilter.innerHTML = '<option value="all">All Languages</option>';
-    Array.from(languageSet).sort().forEach(l => {
+    // Sort languages by full name for better UX
+    Array.from(languageSet).sort((a, b) => {
+        const nameA = getLanguageName(a);
+        const nameB = getLanguageName(b);
+        return nameA.localeCompare(nameB);
+    }).forEach(l => {
         const option = document.createElement('option');
-        option.value = l;
-        option.textContent = l;
+        option.value = l; // Keep the code as the value for filtering
+        option.textContent = getLanguageName(l); // Display full name
         languageFilter.appendChild(option);
     });
 
@@ -237,11 +347,7 @@ function updateVisualizations(animate = true) {
 
     console.log('Filtered data:', filteredData.length, 'movies');
 
-    if (filteredData.length === 0) {
-        return;
-    }
-
-    // Update all visualizations with animation
+    // Update all visualizations with animation (even if no data)
     updateScatterPlot(animate);
     updateGenreChart(animate);
     updateProfitChart(animate);
@@ -264,7 +370,11 @@ function formatCurrency(value) {
     // Format as: 1, 2, 5, 10, 20, 50, 100, ... then 1k, 2k, 5k, ... then 1M, 2M, 5M, etc.
     // Since getLogTicks generates whole numbers (1, 2, 5 at each power), we can safely assume whole numbers
     
-    if (value >= 1000000000) {
+    if (value >= 1000000000000) {
+        // Trillions: 1T, 2T, 5T, 10T, etc.
+        const trillions = Math.round(value / 1000000000000);
+        return trillions + 'T';
+    } else if (value >= 1000000000) {
         // Billions: 1B, 2B, 5B, 10B, etc.
         const billions = Math.round(value / 1000000000);
         return billions + 'B';
@@ -366,9 +476,11 @@ function updateScatterPlot(animate = true) {
     const budgetExtent = d3.extent(rawData, d => d.budget);
     const revenueExtent = d3.extent(rawData, d => d.revenue);
     
-    // Store maximum data values for pan constraints
-    maxXDataValue = budgetExtent[1] || MIN_LOG_VALUE * 10;
-    maxYDataValue = revenueExtent[1] || MIN_LOG_VALUE * 10;
+    // Store maximum data values for pan constraints - use filteredData so constraints apply to visible data
+    const filteredBudgetExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.budget) : budgetExtent;
+    const filteredRevenueExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.revenue) : revenueExtent;
+    maxXDataValue = filteredBudgetExtent[1] || budgetExtent[1] || MIN_LOG_VALUE * 10;
+    maxYDataValue = filteredRevenueExtent[1] || revenueExtent[1] || MIN_LOG_VALUE * 10;
     plotWidth = width;
     plotHeight = height;
     
@@ -498,6 +610,53 @@ function updateScatterPlot(animate = true) {
     // Tooltip
     const tooltip = d3.select('#tooltip');
 
+    // Check if there's no data to display
+    if (filteredData.length === 0) {
+        // Remove any existing "no data" message
+        foregroundLayer.selectAll('.no-data-message').remove();
+        
+        // Display "No data" message in the center of the plot
+        foregroundLayer.append('text')
+            .attr('class', 'no-data-message')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '24px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available for selected filters')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        
+        // Clear any existing dots
+        foregroundLayer.selectAll('.dot').remove();
+        
+        // Update stats box to show no data
+        const statsBox = document.getElementById('statsBox');
+        if (statsBox) {
+            statsBox.innerHTML = 
+                `<div class="stat">
+                    <div>Average ROI</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Avg Budget</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Success Rate</div>
+                    <div class="stat-value">N/A</div>
+                </div>`;
+        }
+        return;
+    }
+
+    // Remove any existing "no data" message
+    foregroundLayer.selectAll('.no-data-message').remove();
+
     // Dots container in foreground layer (renders on top)
     const dotsContainer = foregroundLayer.append('g').attr('class', 'dots-container');
 
@@ -548,7 +707,7 @@ function updateScatterPlot(animate = true) {
                 ROI: ${d.roi.toFixed(1)}%<br/>
                 Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
                 Genres: ${d.genres}<br/>
-                Language: ${d.language}<br/>
+                Language: ${getLanguageName(d.language)}<br/>
                 Runtime: ${d.runtime} min`);
             
             tooltip.style('left', (event.pageX + 10) + 'px')
@@ -622,27 +781,26 @@ function zoomed(event) {
         }
     }
     
-    // Limit panning: prevent panning beyond data boundaries
-    // X-axis: prevent panning left when max x data value would go beyond left edge (x = 0)
-    // Y-axis: prevent panning down when max y data value would go beyond bottom edge
-    //   For inverted y-axis (range [height, 0]): bottom is at y = height
+    // Limit panning: prevent panning beyond center for max values
+    // X-axis: prevent panning left when max x data value would go beyond center (x = width/2)
+    // Y-axis: prevent panning down when max y data value would go beyond center (y = height/2)
+    //   For inverted y-axis (range [height, 0]): center is at y = height/2
     //   When domain min increases (panning down), maxYDataValue maps to larger y positions
-    //   When domain min reaches maxYDataValue, maxYPosition = height (max value at bottom edge)
-    //   Further panning would make maxYPosition > height (max value below bottom, should prevent)
+    //   We want to prevent maxYPosition from going below the center (height/2)
     if (maxXDataValue !== null && maxYDataValue !== null && plotWidth !== null && plotHeight !== null) {
         const maxXPosition = newXScale(maxXDataValue);
         const maxYPosition = newYScale(maxYDataValue);
         
-        // X-axis: prevent panning when max x value would be beyond left edge
-        const xViolated = maxXPosition < 0;
+        // X-axis: prevent panning when max x value would be beyond center (to the left)
+        const xViolated = maxXPosition < plotWidth / 2;
         
-        // Y-axis: prevent panning when max y value would be below bottom edge
-        // maxYPosition > plotHeight means max value is below bottom (not visible, should prevent)
-        const yViolated = maxYPosition > plotHeight;
+        // Y-axis: prevent panning when max y value would be below center (toward bottom)
+        // maxYPosition > plotHeight/2 means max value is below center, should prevent
+        const yViolated = maxYPosition > plotHeight / 2;
         
         if (xViolated || yViolated) {
             // Reject this transform - reset to last valid transform
-            // This prevents panning beyond the point where max values reach the edges
+            // This prevents panning beyond the point where max values reach the center
             const svg = d3.select('#scatterPlot');
             if (lastValidTransform) {
                 svg.call(zoom.transform, lastValidTransform);
@@ -746,6 +904,24 @@ function updateGenreChart(animate = true) {
         count: stats.count,
         avgProfit: stats.avgProfit
     })).sort((a, b) => b.avgROI - a.avgROI).slice(0, 10);
+
+    // Check if there's no data
+    if (data.length === 0 || filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
 
     // Scales
     const xScale = d3.scaleBand()
@@ -898,6 +1074,24 @@ function updateProfitChart(animate = true) {
         .attr('height', height + margin.top + margin.bottom)
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Check if there's no data
+    if (filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
 
     // Calculate profit distribution
     const profitable = filteredData.filter(d => d.profit > 0).length;
