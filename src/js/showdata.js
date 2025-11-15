@@ -370,7 +370,11 @@ function formatCurrency(value) {
     // Format as: 1, 2, 5, 10, 20, 50, 100, ... then 1k, 2k, 5k, ... then 1M, 2M, 5M, etc.
     // Since getLogTicks generates whole numbers (1, 2, 5 at each power), we can safely assume whole numbers
     
-    if (value >= 1000000000) {
+    if (value >= 1000000000000) {
+        // Trillions: 1T, 2T, 5T, 10T, etc.
+        const trillions = Math.round(value / 1000000000000);
+        return trillions + 'T';
+    } else if (value >= 1000000000) {
         // Billions: 1B, 2B, 5B, 10B, etc.
         const billions = Math.round(value / 1000000000);
         return billions + 'B';
