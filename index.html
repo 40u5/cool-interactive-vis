@@ -150,6 +150,22 @@
             width: 150px;
         }
 
+        /* Date range slider styling */
+        .control-group label[for="minDate"] {
+            margin-right: 5px;
+        }
+
+        #minDate, #maxDate {
+            width: 120px;
+            margin: 0 5px;
+        }
+
+        #minDateValue, #maxDateValue {
+            font-weight: 600;
+            color: #667eea;
+            margin: 0 3px;
+        }
+
         .btn {
             padding: 8px 16px;
             background: #667eea;
@@ -191,6 +207,11 @@
         .chart-container.main {
             grid-column: 1;
             grid-row: 1 / 3;
+        }
+
+        /* Extra padding for profit chart to show x-axis labels */
+        #profitChart {
+            margin-bottom: 5px;
         }
 
         .chart-title {
@@ -472,11 +493,6 @@
     <!-- Data Visualization -->
     <div id="dataVisualization">
     <div class="container">
-        <div class="header">
-            <h1>🎬 Cinema ROI Explorer</h1>
-            <p>Interactive visualization of movie budgets, revenues, and profitability across genres</p>
-        </div>
-
         <div class="controls" id="controls">
             <div class="control-group">
                 <label for="genreFilter">Genre:</label>
@@ -494,9 +510,27 @@
                 </select>
             </div>
             <div class="control-group">
-                <label for="minBudget">Min Budget: $</label>
+                <label for="minBudget">Budget: $</label>
                 <input type="range" id="minBudget" min="100000" max="300000000" value="100000" step="1000000">
                 <span id="minBudgetValue">0.1M</span>
+                <span> - </span>
+                <input type="range" id="maxBudget" min="100000" max="300000000" value="300000000" step="1000000">
+                <span id="maxBudgetValue">300M</span>
+            </div>
+            <div class="control-group">
+                <label for="minDate">Release Date:</label>
+                <input type="range" id="minDate" min="1900" max="2025" value="1900" step="1">
+                <span id="minDateValue">1900</span>
+                <span> - </span>
+                <input type="range" id="maxDate" min="1900" max="2025" value="2025" step="1">
+                <span id="maxDateValue">2025</span>
+            </div>
+            <div class="control-group">
+                <label for="sampleSize">Random Sample:</label>
+                <input type="range" id="sampleSize" min="10" max="5369" value="50" step="10">
+                <span id="sampleSizeValue">50</span>
+                <span style="font-size: 0.9em; color: #666;"> movies</span>
+                <button class="btn" id="regenerateSample" style="margin-left: 10px; padding: 5px 15px;">Regenerate Sample</button>
             </div>
             <div class="control-group">
                 <button class="btn" id="resetZoom">Reset Zoom</button>

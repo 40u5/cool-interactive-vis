@@ -84,22 +84,44 @@ function processData(data) {
                budget > 0 && revenue > 0 && runtime > 0;
     }).map(d => {
         const genreList = parseGenres(d.genres || 'Unknown');
+        // Parse release date
+        let releaseYear = null;
+        let releaseDateStr = null;
+        
+        if (d.release_date) {
+            // If it's a Date object (from PapaParse dynamicTyping)
+            if (d.release_date instanceof Date) {
+                releaseYear = d.release_date.getFullYear();
+                releaseDateStr = d.release_date.toISOString().split('T')[0];
+            } 
+            // If it's a string
+            else if (typeof d.release_date === 'string') {
+                releaseDateStr = d.release_date.trim();
+                const yearMatch = releaseDateStr.match(/^(\d{4})/);
+                if (yearMatch) {
+                    releaseYear = parseInt(yearMatch[1]);
+                }
+            }
+        }
+        
         return {
-            id: d.id,
-            title: d.title || 'Unknown',
-            budget: parseFloat(d.budget),
-            revenue: parseFloat(d.revenue),
-            runtime: parseFloat(d.runtime),
-            genres: d.genres || 'Unknown',
+        id: d.id,
+        title: d.title || 'Unknown',
+        budget: parseFloat(d.budget),
+        revenue: parseFloat(d.revenue),
+        runtime: parseFloat(d.runtime),
+        genres: d.genres || 'Unknown',
             genreList: genreList,
-            language: d.original_language || 'Unknown',
-            roi: ((parseFloat(d.revenue) - parseFloat(d.budget)) / parseFloat(d.budget)) * 100,
-            profit: parseFloat(d.revenue) - parseFloat(d.budget),
+        language: d.original_language || 'Unknown',
+            releaseYear: releaseYear,
+            releaseDate: releaseDateStr, // Store original date string for display
+        roi: ((parseFloat(d.revenue) - parseFloat(d.budget)) / parseFloat(d.budget)) * 100,
+        profit: parseFloat(d.revenue) - parseFloat(d.budget),
             mainGenre: getMainGenre(genreList)
         };
     });
 
-    console.log('Filtered to', rawData.length, 'valid movies');
+    console.log('Loaded', rawData.length, 'valid movies');
 
     if (rawData.length === 0) {
         console.error('No valid data found in CSV');
@@ -145,12 +167,95 @@ function processData(data) {
         languageFilter.appendChild(option);
     });
 
-    // Set up budget slider
-    const maxBudget = d3.max(rawData, d => d.budget);
-    const budgetSlider = document.getElementById('minBudget');
-    budgetSlider.min = MIN_SLIDER_BUDGET; // Ensure minimum is 0.1M
-    budgetSlider.max = maxBudget;
-    budgetSlider.value = MIN_SLIDER_BUDGET;
+    // Set up budget sliders
+    const maxBudgetValue = d3.max(rawData, d => d.budget);
+    const minBudgetSlider = document.getElementById('minBudget');
+    const maxBudgetSlider = document.getElementById('maxBudget');
+    const minBudgetValue = document.getElementById('minBudgetValue');
+    const maxBudgetValueElement = document.getElementById('maxBudgetValue');
+    
+    // Set up min budget slider
+    minBudgetSlider.min = MIN_SLIDER_BUDGET;
+    minBudgetSlider.max = maxBudgetValue;
+    minBudgetSlider.value = MIN_SLIDER_BUDGET;
+    
+    // Set up max budget slider
+    maxBudgetSlider.min = MIN_SLIDER_BUDGET;
+    maxBudgetSlider.max = maxBudgetValue;
+    maxBudgetSlider.value = maxBudgetValue;
+    
+    // Update display values
+    if (minBudgetValue) {
+        minBudgetValue.textContent = (MIN_SLIDER_BUDGET / 1000000).toFixed(1) + 'M';
+    }
+    if (maxBudgetValueElement) {
+        maxBudgetValueElement.textContent = (maxBudgetValue / 1000000).toFixed(0) + 'M';
+    }
+
+    // Set up date range sliders - extract years directly from data
+    const years = rawData.map(d => d.releaseYear).filter(y => y !== null && y !== undefined);
+    const minYear = years.length > 0 ? d3.min(years) : 1900;
+    const maxYear = years.length > 0 ? d3.max(years) : new Date().getFullYear();
+    
+    const minDateSlider = document.getElementById('minDate');
+    const maxDateSlider = document.getElementById('maxDate');
+    const minDateValue = document.getElementById('minDateValue');
+    const maxDateValue = document.getElementById('maxDateValue');
+    
+    if (minDateSlider && maxDateSlider) {
+        minDateSlider.min = minYear;
+        minDateSlider.max = maxYear;
+        minDateSlider.value = minYear;
+        
+        maxDateSlider.min = minYear;
+        maxDateSlider.max = maxYear;
+        maxDateSlider.value = maxYear;
+        
+        if (minDateValue) minDateValue.textContent = minYear;
+        if (maxDateValue) maxDateValue.textContent = maxYear;
+        
+        // Date range slider event listeners
+        minDateSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            minDateValue.textContent = value;
+            // Ensure min date doesn't exceed max date
+            if (value > parseInt(maxDateSlider.value)) {
+                maxDateSlider.value = value;
+                maxDateValue.textContent = value;
+            }
+            updateVisualizations(true);
+        });
+        
+        maxDateSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            maxDateValue.textContent = value;
+            // Ensure max date doesn't go below min date
+            if (value < parseInt(minDateSlider.value)) {
+                minDateSlider.value = value;
+                minDateValue.textContent = value;
+            }
+            updateVisualizations(true);
+        });
+    }
+    
+    // Sample size slider event listener
+    const sampleSlider = document.getElementById('sampleSize');
+    const sampleValue = document.getElementById('sampleSizeValue');
+    if (sampleSlider && sampleValue) {
+        sampleSlider.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            sampleValue.textContent = value;
+            updateVisualizations(true);
+        });
+    }
+    
+    // Regenerate sample button event listener
+    const regenerateBtn = document.getElementById('regenerateSample');
+    if (regenerateBtn) {
+        regenerateBtn.addEventListener('click', function() {
+            updateVisualizations(true);
+        });
+    }
 
     // Show controls and dashboard
     document.getElementById('controls').style.display = 'flex';
@@ -183,11 +288,30 @@ function processData(data) {
     // Initialize color indicator
     updateGenreColorIndicator();
     languageFilter.addEventListener('change', () => updateVisualizations(true));
-    budgetSlider.addEventListener('input', function() {
-        const value = this.value / 1000000;
-        document.getElementById('minBudgetValue').textContent = value.toFixed(0) + 'M';
+    
+    // Budget slider event listeners
+    minBudgetSlider.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        minBudgetValue.textContent = (value / 1000000).toFixed(1) + 'M';
+        // Ensure min budget doesn't exceed max budget
+        if (value > parseFloat(maxBudgetSlider.value)) {
+            maxBudgetSlider.value = value;
+            maxBudgetValueElement.textContent = (value / 1000000).toFixed(0) + 'M';
+        }
         updateVisualizations(true);
     });
+    
+    maxBudgetSlider.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        maxBudgetValueElement.textContent = (value / 1000000).toFixed(0) + 'M';
+        // Ensure max budget doesn't go below min budget
+        if (value < parseFloat(minBudgetSlider.value)) {
+            minBudgetSlider.value = value;
+            minBudgetValue.textContent = (value / 1000000).toFixed(1) + 'M';
+        }
+        updateVisualizations(true);
+    });
+    
     document.getElementById('resetZoom').addEventListener('click', resetZoom);
     document.getElementById('animateBtn').addEventListener('click', animateTimeline);
 
@@ -199,13 +323,13 @@ function getMainGenre(genreList) {
     // If it's already an array, use it directly
     if (Array.isArray(genreList)) {
         if (genreList.length === 0) return 'Other';
-        
-        // Priority order for main genres
-        const priorityGenres = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
-                               'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 
-                               'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western'];
-        
-        for (let priority of priorityGenres) {
+    
+    // Priority order for main genres
+    const priorityGenres = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
+                           'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 
+                           'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western'];
+    
+    for (let priority of priorityGenres) {
             if (genreList.includes(priority)) return priority;
         }
         return genreList[0] || 'Other';
@@ -224,21 +348,53 @@ function updateVisualizations(animate = true) {
     const genreFilter = document.getElementById('genreFilter').value;
     const languageFilter = document.getElementById('languageFilter').value;
     const minBudget = parseFloat(document.getElementById('minBudget').value);
+    const maxBudget = parseFloat(document.getElementById('maxBudget').value);
+    const minDateYear = parseInt(document.getElementById('minDate').value);
+    const maxDateYear = parseInt(document.getElementById('maxDate').value);
 
     // Apply filters
     filteredData = rawData.filter(d => {
-        // Genre filter - check if any genre in the list matches
+        // Genre filter
         const genreMatch = genreFilter === 'all' || d.genreList.includes(genreFilter) || 
                          (selectedGenre && d.mainGenre === selectedGenre);
+        // Language filter
         const languageMatch = languageFilter === 'all' || d.language === languageFilter;
-        const budgetMatch = d.budget >= minBudget;
-        return genreMatch && languageMatch && budgetMatch;
+        // Budget filter - range between min and max
+        const budgetMatch = d.budget >= minBudget && d.budget <= maxBudget;
+        // Date filter - movies MUST have a valid year and be in range
+        const dateMatch = d.releaseYear && d.releaseYear > 0 && d.releaseYear >= minDateYear && d.releaseYear <= maxDateYear;
+        
+        return genreMatch && languageMatch && budgetMatch && dateMatch;
     });
-
-    console.log('Filtered data:', filteredData.length, 'movies');
 
     if (filteredData.length === 0) {
         return;
+    }
+    
+    // Update sample size slider max value based on filtered data
+    const sampleSlider = document.getElementById('sampleSize');
+    const sampleValue = document.getElementById('sampleSizeValue');
+    if (sampleSlider && sampleValue) {
+        const currentSample = parseInt(sampleSlider.value);
+        sampleSlider.max = filteredData.length;
+        
+        // If current sample is larger than available data, adjust it
+        if (currentSample > filteredData.length) {
+            sampleSlider.value = filteredData.length;
+            sampleValue.textContent = filteredData.length;
+        }
+        
+        // Apply random sampling
+        const sampleSize = Math.min(parseInt(sampleSlider.value), filteredData.length);
+        if (sampleSize < filteredData.length) {
+            // Random sample using Fisher-Yates shuffle (partial)
+            const sampled = [...filteredData];
+            for (let i = sampled.length - 1; i > sampled.length - sampleSize - 1; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [sampled[i], sampled[j]] = [sampled[j], sampled[i]];
+            }
+            filteredData = sampled.slice(-sampleSize);
+        }
     }
 
     // Update all visualizations with animation
@@ -542,12 +698,13 @@ function updateScatterPlot(animate = true) {
 
             // Show tooltip
             tooltip.style('opacity', '1');
+            const releaseDateInfo = d.releaseDate ? `Release Date: ${d.releaseDate} (${d.releaseYear})<br/>` : '';
             tooltip.html(`<strong>${d.title}</strong><br/>
                 Budget: $${(d.budget / 1000000).toFixed(1)}M<br/>
                 Revenue: $${(d.revenue / 1000000).toFixed(1)}M<br/>
                 ROI: ${d.roi.toFixed(1)}%<br/>
                 Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
-                Genres: ${d.genres}<br/>
+                ${releaseDateInfo}Genres: ${d.genres}<br/>
                 Language: ${d.language}<br/>
                 Runtime: ${d.runtime} min`);
             
@@ -755,13 +912,13 @@ function updateGenreChart(animate = true) {
 
     // Adjust x-axis position to move it up a bit, leaving more room for rotated labels
     const xAxisYPosition = height - 15; // Move axis up by 15px to give more space below
-    
+
     const yScale = d3.scaleLinear()
         .domain([d3.min(data, d => d.avgROI) < 0 ? d3.min(data, d => d.avgROI) : 0, 
                 d3.max(data, d => d.avgROI)])
         .range([xAxisYPosition, 0]) // Use the adjusted x-axis position for proper alignment
         .nice();
-    
+
     const xAxis = g.append('g')
         .attr('transform', `translate(0,${xAxisYPosition})`)
         .call(d3.axisBottom(xScale));
@@ -890,14 +1047,29 @@ function updateProfitChart(animate = true) {
     
     svg.selectAll('*').remove();
     
-    const margin = {top: 20, right: 20, bottom: 50, left: 60};
-    const width = rect.width - margin.left - margin.right;
-    const height = rect.height - margin.top - margin.bottom;
+    // Get computed styles to account for container padding
+    const containerStyle = window.getComputedStyle(container);
+    const containerPadding = {
+        top: parseFloat(containerStyle.paddingTop) || 12,
+        right: parseFloat(containerStyle.paddingRight) || 12,
+        bottom: parseFloat(containerStyle.paddingBottom) || 12,
+        left: parseFloat(containerStyle.paddingLeft) || 12
+    };
+    
+    const margin = {top: 20, right: 20, bottom: 85, left: 60}; // Extra bottom margin for labels
+    // Calculate available space within padded area
+    const availableWidth = rect.width - containerPadding.left - containerPadding.right;
+    const availableHeight = rect.height - containerPadding.top - containerPadding.bottom;
+    const width = availableWidth - margin.left - margin.right;
+    const height = availableHeight - margin.top - margin.bottom;
 
-    const g = svg.attr('width', width + margin.left + margin.right)
-        .attr('height', height + margin.top + margin.bottom)
-        .append('g')
-        .attr('transform', `translate(${margin.left},${margin.top})`);
+    // Set SVG dimensions to match container
+    svg.attr('width', rect.width)
+        .attr('height', rect.height)
+        .style('overflow', 'visible');
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${containerPadding.left + margin.left},${containerPadding.top + margin.top})`);
 
     // Calculate profit distribution
     const profitable = filteredData.filter(d => d.profit > 0).length;
@@ -920,11 +1092,29 @@ function updateProfitChart(animate = true) {
         .nice();
 
     // Axes
-    g.append('g')
+    const xAxis = g.append('g')
         .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .selectAll('text')
-        .style('font-size', '12px');
+        .call(d3.axisBottom(xScale));
+    
+    // Style x-axis labels - ensure they're visible and positioned correctly
+    xAxis.selectAll('text')
+        .style('font-size', '13px')
+        .style('fill', '#333')
+        .style('font-weight', 'normal')
+        .style('opacity', 1)
+        .attr('dy', '1em')  // Position below axis line
+        .attr('dx', 0)
+        .style('text-anchor', 'middle')
+        .style('pointer-events', 'none')
+        .style('visibility', 'visible');
+    
+    // Style x-axis tick lines
+    xAxis.selectAll('line')
+        .style('stroke', '#ccc');
+    
+    // Style x-axis path
+    xAxis.selectAll('path')
+        .style('stroke', '#ccc');
 
     g.append('g')
         .call(d3.axisLeft(yScale).ticks(5))
@@ -1006,42 +1196,77 @@ function animateTimeline() {
     btn.textContent = 'Stop Animation';
     btn.onclick = stopAnimation;
     
-    // Group data by budget ranges and animate through them
-    const budgetRanges = [0, 1000000, 5000000, 10000000, 25000000, 50000000, 100000000, 200000000];
-    let currentRange = 0;
+    // Get min and max years from data
+    const years = rawData.map(d => d.releaseYear).filter(y => y !== null && y !== undefined);
+    const minYear = d3.min(years);
+    const maxYear = 2017; // Cap at 2017
     
-    function animateRange() {
-        if (!isAnimating || currentRange >= budgetRanges.length - 1) {
+    let currentYearStart = minYear;
+    
+    function animateYearRange() {
+        if (!isAnimating || currentYearStart > maxYear) {
             stopAnimation();
             return;
         }
         
-        const slider = document.getElementById('minBudget');
-        const maxBudget = budgetRanges[currentRange + 1];
+        // Calculate the interval (5 years, or less if near the end)
+        let yearInterval = 5;
+        const remainingYears = maxYear - currentYearStart;
+        if (remainingYears < 5) {
+            yearInterval = remainingYears + 1; // Include the max year
+        }
         
-        // Animate slider
-        slider.value = budgetRanges[currentRange];
-        document.getElementById('minBudgetValue').textContent = 
-            (budgetRanges[currentRange] / 1000000).toFixed(0) + 'M';
+        const currentYearEnd = Math.min(currentYearStart + yearInterval - 1, maxYear);
         
-        // Filter to show only movies in current range
-        filteredData = rawData.filter(d => 
-            d.budget >= budgetRanges[currentRange] && 
-            d.budget < maxBudget
-        );
+        // Update date sliders
+        const minDateSlider = document.getElementById('minDate');
+        const maxDateSlider = document.getElementById('maxDate');
+        minDateSlider.value = currentYearStart;
+        maxDateSlider.value = currentYearEnd;
+        document.getElementById('minDateValue').textContent = currentYearStart;
+        document.getElementById('maxDateValue').textContent = currentYearEnd;
         
-        // Update visualizations with animation
+        // Filter data for current year range (using the same filter logic as updateVisualizations)
+        const genreFilter = document.getElementById('genreFilter').value;
+        const languageFilter = document.getElementById('languageFilter').value;
+        const minBudget = parseFloat(document.getElementById('minBudget').value);
+        const maxBudget = parseFloat(document.getElementById('maxBudget').value);
+        
+        filteredData = rawData.filter(d => {
+            const genreMatch = genreFilter === 'all' || d.genreList.includes(genreFilter) || 
+                             (selectedGenre && d.mainGenre === selectedGenre);
+            const languageMatch = languageFilter === 'all' || d.language === languageFilter;
+            const budgetMatch = d.budget >= minBudget && d.budget <= maxBudget;
+            const dateMatch = d.releaseYear && d.releaseYear >= currentYearStart && d.releaseYear <= currentYearEnd;
+            return genreMatch && languageMatch && budgetMatch && dateMatch;
+        });
+        
+        // Apply sample size filter
+        const sampleSlider = document.getElementById('sampleSize');
+        if (sampleSlider && filteredData.length > 0) {
+            const sampleSize = Math.min(parseInt(sampleSlider.value), filteredData.length);
+            if (sampleSize < filteredData.length) {
+                const sampled = [...filteredData];
+                for (let i = sampled.length - 1; i > sampled.length - sampleSize - 1; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [sampled[i], sampled[j]] = [sampled[j], sampled[i]];
+                }
+                filteredData = sampled.slice(-sampleSize);
+            }
+        }
+        
+        // Update visualizations with smooth transition
         if (filteredData.length > 0) {
             updateScatterPlot(true);
             updateGenreChart(true);
             updateProfitChart(true);
         }
         
-        currentRange++;
-        setTimeout(animateRange, 2000);
+        currentYearStart += 5;
+        setTimeout(animateYearRange, 2500); // 2.5 seconds per interval
     }
     
-    animateRange();
+    animateYearRange();
 }
 
 function stopAnimation() {
@@ -1050,9 +1275,62 @@ function stopAnimation() {
     btn.textContent = 'Play Timeline';
     btn.onclick = animateTimeline;
     
-    // Reset to show all data
+    // Reset ALL filters and sliders to initial state
+    
+    // Reset genre filter
+    document.getElementById('genreFilter').value = 'all';
+    selectedGenre = null;
+    
+    // Hide genre color indicator
+    const genreColorIndicator = document.getElementById('genreColorIndicator');
+    if (genreColorIndicator) {
+        genreColorIndicator.style.display = 'none';
+    }
+    
+    // Reset language filter
+    document.getElementById('languageFilter').value = 'all';
+    
+    // Reset budget sliders
+    const maxBudgetFromData = rawData.length > 0 ? d3.max(rawData, d => d.budget) : 300000000;
     document.getElementById('minBudget').value = MIN_SLIDER_BUDGET;
     document.getElementById('minBudgetValue').textContent = '0.1M';
+    document.getElementById('maxBudget').value = maxBudgetFromData;
+    document.getElementById('maxBudgetValue').textContent = (maxBudgetFromData / 1000000).toFixed(0) + 'M';
+    
+    // Reset date sliders to show all years
+    const years = rawData.map(d => d.releaseYear).filter(y => y !== null && y !== undefined);
+    const minYear = years.length > 0 ? d3.min(years) : 1900;
+    const maxYear = years.length > 0 ? d3.max(years) : 2025;
+    document.getElementById('minDate').value = minYear;
+    document.getElementById('maxDate').value = maxYear;
+    document.getElementById('minDateValue').textContent = minYear;
+    document.getElementById('maxDateValue').textContent = maxYear;
+    
+    // Reset sample size to max (show all data)
+    const sampleSlider = document.getElementById('sampleSize');
+    const sampleValue = document.getElementById('sampleSizeValue');
+    if (sampleSlider && sampleValue) {
+        sampleSlider.max = rawData.length;
+        sampleSlider.value = rawData.length;
+        sampleValue.textContent = rawData.length;
+    }
+    
+    // Clear any genre highlights
+    d3.selectAll('.bar').classed('selected', false);
+    d3.selectAll('.dot')
+        .classed('highlighted', false)
+        .classed('dimmed', false);
+    
+    // Reset zoom
+    const svg = d3.select('#scatterPlot');
+    lastValidTransform = d3.zoomIdentity;
+    if (zoom) {
+        svg.transition()
+            .duration(750)
+            .call(zoom.transform, d3.zoomIdentity);
+    }
+    
+    // Update all visualizations with the reset state
     updateVisualizations(true);
 }
 
@@ -1063,7 +1341,7 @@ function autoLoadData() {
         return; // Don't load if not visible
     }
     
-    fetch('cleaned.csv')
+    fetch('cleaned.csv?t=' + Date.now())
         .then(response => {
             if (!response.ok) throw new Error('No cleaned.csv found');
             return response.text();
