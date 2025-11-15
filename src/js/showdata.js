@@ -7,6 +7,111 @@ let isAnimating = false;
 // Global color scale for genres - will be initialized dynamically
 let colorScale;
 
+// Language code to full name mapping (ISO 639-1)
+const languageNames = {
+    'ab': 'Abkhazian',
+    'af': 'Afrikaans',
+    'am': 'Amharic',
+    'ar': 'Arabic',
+    'ay': 'Aymara',
+    'bg': 'Bulgarian',
+    'bm': 'Bambara',
+    'bn': 'Bengali',
+    'bo': 'Tibetan',
+    'bs': 'Bosnian',
+    'ca': 'Catalan',
+    'cn': 'Cantonese',
+    'cs': 'Czech',
+    'cy': 'Welsh',
+    'da': 'Danish',
+    'de': 'German',
+    'el': 'Greek',
+    'en': 'English',
+    'eo': 'Esperanto',
+    'es': 'Spanish',
+    'et': 'Estonian',
+    'eu': 'Basque',
+    'fa': 'Persian',
+    'fi': 'Finnish',
+    'fr': 'French',
+    'fy': 'Western Frisian',
+    'gl': 'Galician',
+    'he': 'Hebrew',
+    'hi': 'Hindi',
+    'hr': 'Croatian',
+    'hu': 'Hungarian',
+    'hy': 'Armenian',
+    'id': 'Indonesian',
+    'is': 'Icelandic',
+    'it': 'Italian',
+    'iu': 'Inuktitut',
+    'ja': 'Japanese',
+    'jv': 'Javanese',
+    'ka': 'Georgian',
+    'kk': 'Kazakh',
+    'kn': 'Kannada',
+    'ko': 'Korean',
+    'ku': 'Kurdish',
+    'ky': 'Kyrgyz',
+    'la': 'Latin',
+    'lb': 'Luxembourgish',
+    'lo': 'Lao',
+    'lt': 'Lithuanian',
+    'lv': 'Latvian',
+    'mk': 'Macedonian',
+    'ml': 'Malayalam',
+    'mn': 'Mongolian',
+    'mr': 'Marathi',
+    'ms': 'Malay',
+    'mt': 'Maltese',
+    'nb': 'Norwegian Bokmål',
+    'ne': 'Nepali',
+    'nl': 'Dutch',
+    'no': 'Norwegian',
+    'pa': 'Punjabi',
+    'pl': 'Polish',
+    'ps': 'Pashto',
+    'pt': 'Portuguese',
+    'qu': 'Quechua',
+    'ro': 'Romanian',
+    'ru': 'Russian',
+    'rw': 'Kinyarwanda',
+    'sh': 'Serbo-Croatian',
+    'si': 'Sinhala',
+    'sk': 'Slovak',
+    'sl': 'Slovenian',
+    'sm': 'Samoan',
+    'sq': 'Albanian',
+    'sr': 'Serbian',
+    'sv': 'Swedish',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'tg': 'Tajik',
+    'th': 'Thai',
+    'tl': 'Tagalog',
+    'tr': 'Turkish',
+    'uk': 'Ukrainian',
+    'ur': 'Urdu',
+    'uz': 'Uzbek',
+    'vi': 'Vietnamese',
+    'wo': 'Wolof',
+    'xx': 'No Language',
+    'zh': 'Chinese',
+    'zu': 'Zulu'
+};
+
+/**
+ * Get full language name from ISO 639-1 code
+ * @param {string} code - ISO 639-1 language code
+ * @returns {string} Full language name or the code if not found
+ */
+function getLanguageName(code) {
+    if (!code || code === 'Unknown') return 'Unknown';
+    // Handle numeric values that might appear in the data
+    if (!isNaN(code)) return code;
+    return languageNames[code.toLowerCase()] || code.toUpperCase();
+}
+
 // Default color palette for genres
 const genreColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5', '#ff9896', '#c5b0d5'];
 
@@ -138,10 +243,15 @@ function processData(data) {
     // Populate language filter
     const languageFilter = document.getElementById('languageFilter');
     languageFilter.innerHTML = '<option value="all">All Languages</option>';
-    Array.from(languageSet).sort().forEach(l => {
+    // Sort languages by full name for better UX
+    Array.from(languageSet).sort((a, b) => {
+        const nameA = getLanguageName(a);
+        const nameB = getLanguageName(b);
+        return nameA.localeCompare(nameB);
+    }).forEach(l => {
         const option = document.createElement('option');
-        option.value = l;
-        option.textContent = l;
+        option.value = l; // Keep the code as the value for filtering
+        option.textContent = getLanguageName(l); // Display full name
         languageFilter.appendChild(option);
     });
 
@@ -548,7 +658,7 @@ function updateScatterPlot(animate = true) {
                 ROI: ${d.roi.toFixed(1)}%<br/>
                 Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
                 Genres: ${d.genres}<br/>
-                Language: ${d.language}<br/>
+                Language: ${getLanguageName(d.language)}<br/>
                 Runtime: ${d.runtime} min`);
             
             tooltip.style('left', (event.pageX + 10) + 'px')
