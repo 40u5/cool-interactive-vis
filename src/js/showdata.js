@@ -870,12 +870,15 @@ function updateScatterPlot(animate = true) {
             // Show tooltip
             tooltip.style('opacity', '1');
             const releaseDateInfo = d.releaseDate ? `Release Date: ${d.releaseDate} (${d.releaseYear})<br/>` : '';
+            // Extract genre names from genreList array
+            const genreNames = Array.isArray(d.genreList) ? d.genreList.join(', ') : (d.genreList || 'Unknown');
+            
             tooltip.html(`<strong>${d.title}</strong><br/>
                 Budget: $${(d.budget / 1000000).toFixed(1)}M<br/>
                 Revenue: $${(d.revenue / 1000000).toFixed(1)}M<br/>
                 ROI: ${d.roi.toFixed(1)}%<br/>
                 Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
-                ${releaseDateInfo}Genres: ${d.genres}<br/>
+                ${releaseDateInfo}Genres: ${genreNames}<br/>
                 Language: ${getLanguageName(d.language)}<br/>
                 Runtime: ${d.runtime} min`);
             

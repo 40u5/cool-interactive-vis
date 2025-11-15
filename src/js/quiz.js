@@ -12,6 +12,7 @@ let quizScore = {
     correct: 0,
     total: 0
 };
+let questionCount = 0; // Track number of questions shown
 
 // Load movie data
 function loadQuizData() {
@@ -114,6 +115,28 @@ function loadNextQuestion() {
         return;
     }
     
+    // Increment question count
+    questionCount++;
+    console.log('Question count:', questionCount);
+    
+    // Pulsate background every 5 questions (5, 10, 15, 20, etc.)
+    if (questionCount % 5 === 0) {
+        console.log('Triggering pulsate at question', questionCount);
+        const pulsateBg = document.getElementById('pulsateBackground');
+        if (pulsateBg) {
+            // Reset and prepare for new animation
+            pulsateBg.classList.remove('active');
+            pulsateBg.style.opacity = '1'; // Make sure it's visible
+            // Force a reflow to restart animation
+            void pulsateBg.offsetWidth;
+            pulsateBg.classList.add('active');
+            setTimeout(() => {
+                pulsateBg.classList.remove('active');
+                pulsateBg.style.opacity = '0';
+            }, 1800); // Remove after 3 pulsations complete (0.6s * 3 = 1.8s)
+        }
+    }
+    
     // Display movie
     const posterUrl = `https://image.tmdb.org/t/p/w500${currentMovie.poster_path}`;
     const budgetM = (parseFloat(currentMovie.budget) / 1000000).toFixed(1);
@@ -133,6 +156,13 @@ function loadNextQuestion() {
     // Hide result container
     document.getElementById('resultContainer').style.display = 'none';
     document.getElementById('quizButtons').style.display = 'grid';
+    
+    // Reset quiz content opacity and transform in case user came back
+    const quizContent = document.getElementById('quizContent');
+    if (quizContent) {
+        quizContent.style.opacity = '1';
+        quizContent.style.transform = 'rotate(0deg)';
+    }
 }
 
 // Check answer
@@ -211,21 +241,30 @@ function checkAnswer(userAnswer) {
 }
 
 // Initialize quiz when page is shown
+let isInitialized = false;
+
 function initializeQuiz() {
     console.log('Initializing quiz...');
     
-    // Reset score on fresh initialization
-    quizScore = {
-        correct: 0,
-        total: 0
-    };
-    document.getElementById('quizScore').textContent = '0/0';
+    // Reset score and question count ONLY on first initialization
+    if (!isInitialized) {
+        quizScore = {
+            correct: 0,
+            total: 0
+        };
+        questionCount = 0;
+        isInitialized = true;
+    }
+    document.getElementById('quizScore').textContent = `${quizScore.correct}/${quizScore.total}`;
     
     // Load data if not already loaded
     if (quizData.length === 0) {
         loadQuizData();
     } else {
-        loadNextQuestion();
+        // Only load next question if we haven't loaded one yet
+        if (questionCount === 0) {
+            loadNextQuestion();
+        }
     }
     
     // Add event listeners to quiz buttons
@@ -241,9 +280,35 @@ function initializeQuiz() {
         loadNextQuestion();
     });
     
-    // Back button
+    // Back button - goes to data page with rotation animation
     document.getElementById('backToHomeBtn').addEventListener('click', () => {
-        window.location.hash = '#/';
+        const quizContent = document.getElementById('quizContent');
+        
+        if (!quizContent) {
+            window.location.hash = '#/data';
+            return;
+        }
+        
+        // Step 1: Rotate 45 degrees slowly (1 second)
+        quizContent.style.transition = 'transform 1s ease-in-out';
+        quizContent.style.transform = 'rotate(45deg)';
+        
+        // Step 2: After 1 second, rotate back at double speed (0.5 seconds)
+        setTimeout(() => {
+            quizContent.style.transition = 'transform 0.5s ease-in-out';
+            quizContent.style.transform = 'rotate(0deg)';
+            
+            // Step 3: After rotation back (0.5s), fade out (0.5s)
+            setTimeout(() => {
+                quizContent.style.transition = 'opacity 0.5s ease-in-out';
+                quizContent.style.opacity = '0';
+                
+                // Step 4: After fade out, navigate to data page
+                setTimeout(() => {
+                    window.location.hash = '#/data';
+                }, 500);
+            }, 500);
+        }, 1000);
     });
 }
 
