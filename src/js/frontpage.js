@@ -77,17 +77,20 @@ function skipAnimation() {
 }
 
 function showDataVisualization() {
-    // Navigate to /data
-    window.history.pushState({}, '', '/data');
+    // Use hash-based routing to avoid server configuration issues
+    window.location.hash = '#/data';
     updateView();
 }
 
 function updateView() {
-    const path = window.location.pathname;
+    // Use hash-based routing instead of pathname to avoid 404 errors
+    const hash = window.location.hash;
+    const path = hash === '' ? '/' : hash;
     const frontpage = document.getElementById('frontpage');
     const dataViz = document.getElementById('dataVisualization');
     
-    if (path === '/data') {
+    // Check if path is /data or contains /data
+    if (path === '#/data' || path.includes('/data')) {
         // Show data page
         if (frontpage) frontpage.style.display = 'none';
         if (dataViz) {
@@ -108,14 +111,28 @@ function updateView() {
     }
 }
 
-// Handle browser back/forward
-window.addEventListener('popstate', updateView);
+// Handle browser back/forward with hash changes
+window.addEventListener('hashchange', updateView);
 
 // Initialize on page load
 window.addEventListener('DOMContentLoaded', () => {
+    // If there's no hash and we're at root, set default hash
+    if (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '')) {
+        window.location.hash = '#/';
+    }
+    
+    // First update the view based on current hash/path
     updateView();
-    if (window.location.pathname === '/' || window.location.pathname === '') {
-        initializeFrontpage();
+    
+    // Only initialize frontpage animation if we're on the home page
+    const hash = window.location.hash;
+    const path = hash === '' ? '/' : hash;
+    if (path === '/' || path === '#/' || (!path.includes('/data'))) {
+        // Only start animation if frontpage is visible and hasn't been animated yet
+        const frontpage = document.getElementById('frontpage');
+        if (frontpage && frontpage.style.display !== 'none') {
+            initializeFrontpage();
+        }
     }
 });
 
