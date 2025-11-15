@@ -717,8 +717,10 @@ function updateGenreChart(animate = true) {
     
     svg.selectAll('*').remove();
     
-    const margin = {top: 20, right: 20, bottom: 60, left: 60};
+    // Increased bottom margin significantly for rotated text labels
+    const margin = {top: 20, right: 20, bottom: 100, left: 60};
     const width = rect.width - margin.left - margin.right;
+    // Reduce the effective chart height to leave more room for rotated labels at bottom
     const height = rect.height - margin.top - margin.bottom;
 
     const g = svg.attr('width', width + margin.left + margin.right)
@@ -751,20 +753,31 @@ function updateGenreChart(animate = true) {
         .range([0, width])
         .padding(0.2);
 
+    // Adjust x-axis position to move it up a bit, leaving more room for rotated labels
+    const xAxisYPosition = height - 15; // Move axis up by 15px to give more space below
+    
     const yScale = d3.scaleLinear()
         .domain([d3.min(data, d => d.avgROI) < 0 ? d3.min(data, d => d.avgROI) : 0, 
                 d3.max(data, d => d.avgROI)])
-        .range([height, 0])
+        .range([xAxisYPosition, 0]) // Use the adjusted x-axis position for proper alignment
         .nice();
-
-    // Axes
-    g.append('g')
-        .attr('transform', `translate(0,${height})`)
-        .call(d3.axisBottom(xScale))
-        .selectAll('text')
-        .style('font-size', '10px')
+    
+    const xAxis = g.append('g')
+        .attr('transform', `translate(0,${xAxisYPosition})`)
+        .call(d3.axisBottom(xScale));
+    
+    // Style x-axis text (genre labels) - rotate and position correctly
+    // Use selectAll to get all text elements and ensure they're visible
+    xAxis.selectAll('text')
+        .style('font-size', '11px')
+        .style('fill', '#333')
+        .style('opacity', 1)
         .attr('transform', 'rotate(-45)')
-        .attr('text-anchor', 'end');
+        .attr('dx', '-0.9em')
+        .attr('dy', '0.5em')
+        .attr('text-anchor', 'end')
+        .style('font-weight', 'normal')
+        .style('pointer-events', 'none');
 
     g.append('g')
         .call(d3.axisLeft(yScale).ticks(5))
@@ -801,7 +814,7 @@ function updateGenreChart(animate = true) {
         .append('rect')
         .attr('class', 'bar')
         .attr('x', d => xScale(d.genre))
-        .attr('y', d => d.avgROI >= 0 ? height : yScale(d.avgROI))
+        .attr('y', d => d.avgROI >= 0 ? xAxisYPosition : yScale(d.avgROI))
         .attr('width', xScale.bandwidth())
         .attr('height', 0)
         .attr('fill', d => colorScale(d.genre));
