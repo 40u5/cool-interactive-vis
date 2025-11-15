@@ -4,10 +4,73 @@ let filteredData = [];
 let selectedGenre = null;
 let isAnimating = false;
 
-// Color scale for genres
-const colorScale = d3.scaleOrdinal()
-    .domain(['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western', 'Other'])
-    .range(d3.schemeCategory20 || ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d']);
+// Global color scale for genres - will be initialized dynamically
+let colorScale;
+
+// Default color palette for genres
+const genreColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5', '#ff9896', '#c5b0d5'];
+
+/**
+ * Initialize or update the global color scale based on genre list
+ */
+function initializeColorScale(genres) {
+    // Sort genres for consistent color assignment
+    const sortedGenres = Array.from(genres).sort();
+    colorScale = d3.scaleOrdinal()
+        .domain(sortedGenres)
+        .range(genreColors.slice(0, sortedGenres.length));
+    
+    // If we need more colors, extend the palette
+    if (sortedGenres.length > genreColors.length) {
+        const extendedColors = [...genreColors];
+        for (let i = genreColors.length; i < sortedGenres.length; i++) {
+            // Generate additional colors using d3 color schemes
+            extendedColors.push(d3.schemeCategory20[i % 20] || d3.interpolateRainbow(i / sortedGenres.length));
+        }
+        colorScale.range(extendedColors.slice(0, sortedGenres.length));
+    }
+}
+
+/**
+ * Parse genres string from CSV format: "[{'id': 18, 'name': 'Drama'}, {'id': 10749, 'name': 'Romance'}]"
+ * Returns an array of genre names only
+ */
+function parseGenres(genresString) {
+    if (!genresString || genresString === 'Unknown' || genresString === '[]') {
+        return [];
+    }
+    
+    // Handle empty list
+    if (genresString.trim() === '[]') {
+        return [];
+    }
+    
+    // Use regex to extract genre names from the pattern: 'name': 'GenreName'
+    // This handles the Python dictionary string format reliably
+    const nameMatches = genresString.match(/'name':\s*'([^']+)'/g);
+    if (nameMatches) {
+        return nameMatches.map(match => {
+            // Extract the genre name from the match
+            const nameMatch = match.match(/'name':\s*'([^']+)'/);
+            return nameMatch ? nameMatch[1] : null;
+        }).filter(name => name !== null);
+    }
+    
+    // Fallback: try JSON parsing if format is different
+    try {
+        // Replace single quotes with double quotes to make it valid JSON
+        let jsonString = genresString.replace(/'/g, '"');
+        const genresArray = JSON.parse(jsonString);
+        
+        // Extract only the 'name' field from each genre object
+        return genresArray
+            .filter(genre => genre && genre.name)
+            .map(genre => genre.name);
+    } catch (e) {
+        console.warn('Failed to parse genres:', genresString);
+        return [];
+    }
+}
 
 function processData(data) {
     console.log('Processing', data.length, 'rows');
@@ -19,19 +82,22 @@ function processData(data) {
         const runtime = parseFloat(d.runtime);
         return !isNaN(budget) && !isNaN(revenue) && !isNaN(runtime) && 
                budget > 0 && revenue > 0 && runtime > 0;
-    }).map(d => ({
-        id: d.id,
-        title: d.title || 'Unknown',
-        budget: parseFloat(d.budget),
-        revenue: parseFloat(d.revenue),
-        runtime: parseFloat(d.runtime),
-        genres: d.genres || 'Unknown',
-        genreList: (d.genres || 'Unknown').split(',').map(g => g.trim()).filter(g => g),
-        language: d.original_language || 'Unknown',
-        roi: ((parseFloat(d.revenue) - parseFloat(d.budget)) / parseFloat(d.budget)) * 100,
-        profit: parseFloat(d.revenue) - parseFloat(d.budget),
-        mainGenre: getMainGenre(d.genres || 'Unknown')
-    }));
+    }).map(d => {
+        const genreList = parseGenres(d.genres || 'Unknown');
+        return {
+            id: d.id,
+            title: d.title || 'Unknown',
+            budget: parseFloat(d.budget),
+            revenue: parseFloat(d.revenue),
+            runtime: parseFloat(d.runtime),
+            genres: d.genres || 'Unknown',
+            genreList: genreList,
+            language: d.original_language || 'Unknown',
+            roi: ((parseFloat(d.revenue) - parseFloat(d.budget)) / parseFloat(d.budget)) * 100,
+            profit: parseFloat(d.revenue) - parseFloat(d.budget),
+            mainGenre: getMainGenre(genreList)
+        };
+    });
 
     console.log('Filtered to', rawData.length, 'valid movies');
 
@@ -51,13 +117,21 @@ function processData(data) {
         if (d.language && d.language !== 'Unknown') languageSet.add(d.language);
     });
 
-    // Populate genre filter
+    // Initialize global color scale with all genres
+    initializeColorScale(genreSet);
+
+    // Populate genre filter with color indicators
     const genreFilter = document.getElementById('genreFilter');
     genreFilter.innerHTML = '<option value="all">All Genres</option>';
     Array.from(genreSet).sort().forEach(g => {
         const option = document.createElement('option');
         option.value = g;
-        option.textContent = g;
+        const color = colorScale(g);
+        // Add colored bullet indicator (●) before genre name
+        // This works better across browsers than HTML in option elements
+        option.textContent = `● ${g}`;
+        option.style.color = color;
+        option.setAttribute('data-color', color);
         genreFilter.appendChild(option);
     });
 
@@ -85,8 +159,29 @@ function processData(data) {
     // Add event listeners
     genreFilter.addEventListener('change', () => {
         selectedGenre = null;
+        updateGenreColorIndicator();
         updateVisualizations(true);
     });
+
+    // Update color indicator when genre filter changes
+    function updateGenreColorIndicator() {
+        const genreColorIndicator = document.getElementById('genreColorIndicator');
+        const selectedValue = genreFilter.value;
+        if (selectedValue && selectedValue !== 'all' && colorScale) {
+            const color = colorScale(selectedValue);
+            if (genreColorIndicator) {
+                genreColorIndicator.style.display = 'block';
+                genreColorIndicator.style.backgroundColor = color;
+            }
+        } else {
+            if (genreColorIndicator) {
+                genreColorIndicator.style.display = 'none';
+            }
+        }
+    }
+    
+    // Initialize color indicator
+    updateGenreColorIndicator();
     languageFilter.addEventListener('change', () => updateVisualizations(true));
     budgetSlider.addEventListener('input', function() {
         const value = this.value / 1000000;
@@ -100,20 +195,29 @@ function processData(data) {
     updateVisualizations(false);
 }
 
-function getMainGenre(genresString) {
-    if (!genresString) return 'Other';
-    const genres = genresString.split(',').map(g => g.trim()).filter(g => g);
-    if (genres.length === 0) return 'Other';
-    
-    // Priority order for main genres
-    const priorityGenres = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
-                           'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 
-                           'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western'];
-    
-    for (let priority of priorityGenres) {
-        if (genres.includes(priority)) return priority;
+function getMainGenre(genreList) {
+    // If it's already an array, use it directly
+    if (Array.isArray(genreList)) {
+        if (genreList.length === 0) return 'Other';
+        
+        // Priority order for main genres
+        const priorityGenres = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 
+                               'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 
+                               'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War', 'Western'];
+        
+        for (let priority of priorityGenres) {
+            if (genreList.includes(priority)) return priority;
+        }
+        return genreList[0] || 'Other';
     }
-    return genres[0] || 'Other';
+    
+    // Fallback: if it's a string, parse it
+    if (typeof genreList === 'string') {
+        const parsed = parseGenres(genreList);
+        return getMainGenre(parsed);
+    }
+    
+    return 'Other';
 }
 
 function updateVisualizations(animate = true) {

@@ -112,6 +112,40 @@
             outline: none;
         }
 
+        /* Style for genre filter options with colors */
+        #genreFilter option {
+            padding: 6px 10px;
+            font-size: 14px;
+        }
+
+        #genreFilter option:not([value="all"]) {
+            padding-left: 25px;
+            position: relative;
+        }
+
+        /* Add a visual color indicator for genre filter */
+        .genre-color-indicator {
+            position: absolute;
+            left: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #genreFilter {
+            padding-left: 28px;
+        }
+
+        #genreFilter[value="all"] ~ .genre-color-indicator {
+            display: none !important;
+        }
+
         input[type="range"] {
             width: 150px;
         }
@@ -446,9 +480,12 @@
         <div class="controls" id="controls">
             <div class="control-group">
                 <label for="genreFilter">Genre:</label>
-                <select id="genreFilter">
-                    <option value="all">All Genres</option>
-                </select>
+                <div style="position: relative; display: inline-block;">
+                    <span id="genreColorIndicator" class="genre-color-indicator" style="display: none;"></span>
+                    <select id="genreFilter">
+                        <option value="all">All Genres</option>
+                    </select>
+                </div>
             </div>
             <div class="control-group">
                 <label for="languageFilter">Language:</label>
