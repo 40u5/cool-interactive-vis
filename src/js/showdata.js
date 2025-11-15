@@ -347,11 +347,7 @@ function updateVisualizations(animate = true) {
 
     console.log('Filtered data:', filteredData.length, 'movies');
 
-    if (filteredData.length === 0) {
-        return;
-    }
-
-    // Update all visualizations with animation
+    // Update all visualizations with animation (even if no data)
     updateScatterPlot(animate);
     updateGenreChart(animate);
     updateProfitChart(animate);
@@ -608,6 +604,53 @@ function updateScatterPlot(animate = true) {
     // Tooltip
     const tooltip = d3.select('#tooltip');
 
+    // Check if there's no data to display
+    if (filteredData.length === 0) {
+        // Remove any existing "no data" message
+        foregroundLayer.selectAll('.no-data-message').remove();
+        
+        // Display "No data" message in the center of the plot
+        foregroundLayer.append('text')
+            .attr('class', 'no-data-message')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '24px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available for selected filters')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        
+        // Clear any existing dots
+        foregroundLayer.selectAll('.dot').remove();
+        
+        // Update stats box to show no data
+        const statsBox = document.getElementById('statsBox');
+        if (statsBox) {
+            statsBox.innerHTML = 
+                `<div class="stat">
+                    <div>Average ROI</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Avg Budget</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Success Rate</div>
+                    <div class="stat-value">N/A</div>
+                </div>`;
+        }
+        return;
+    }
+
+    // Remove any existing "no data" message
+    foregroundLayer.selectAll('.no-data-message').remove();
+
     // Dots container in foreground layer (renders on top)
     const dotsContainer = foregroundLayer.append('g').attr('class', 'dots-container');
 
@@ -857,6 +900,24 @@ function updateGenreChart(animate = true) {
         avgProfit: stats.avgProfit
     })).sort((a, b) => b.avgROI - a.avgROI).slice(0, 10);
 
+    // Check if there's no data
+    if (data.length === 0 || filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
+
     // Scales
     const xScale = d3.scaleBand()
         .domain(data.map(d => d.genre))
@@ -1008,6 +1069,24 @@ function updateProfitChart(animate = true) {
         .attr('height', height + margin.top + margin.bottom)
         .append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Check if there's no data
+    if (filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
 
     // Calculate profit distribution
     const profitable = filteredData.filter(d => d.profit > 0).length;
