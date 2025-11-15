@@ -13,6 +13,7 @@ let quizScore = {
     total: 0
 };
 let questionCount = 0; // Track number of questions shown
+let isLoadingNext = false; // Prevent concurrent loads
 
 // Load movie data
 function loadQuizData() {
@@ -109,9 +110,18 @@ function getRandomMovie() {
 
 // Load next question
 function loadNextQuestion() {
+    // Prevent concurrent calls
+    if (isLoadingNext) {
+        console.log('Already loading next question, skipping...');
+        return;
+    }
+    
+    isLoadingNext = true;
+    
     currentMovie = getRandomMovie();
     if (!currentMovie) {
         console.error('No movies available for quiz');
+        isLoadingNext = false;
         return;
     }
     
@@ -163,6 +173,9 @@ function loadNextQuestion() {
         quizContent.style.opacity = '1';
         quizContent.style.transform = 'rotate(0deg)';
     }
+    
+    // Reset loading flag
+    isLoadingNext = false;
 }
 
 // Check answer
@@ -242,6 +255,7 @@ function checkAnswer(userAnswer) {
 
 // Initialize quiz when page is shown
 let isInitialized = false;
+let eventListenersAttached = false;
 
 function initializeQuiz() {
     console.log('Initializing quiz...');
@@ -267,49 +281,60 @@ function initializeQuiz() {
         }
     }
     
-    // Add event listeners to quiz buttons
-    document.querySelectorAll('.quiz-option').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const answer = this.getAttribute('data-answer');
-            checkAnswer(answer);
+    // Add event listeners ONLY once
+    if (!eventListenersAttached) {
+        // Add event listeners to quiz buttons
+        document.querySelectorAll('.quiz-option').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const answer = this.getAttribute('data-answer');
+                checkAnswer(answer);
+            });
         });
-    });
-    
-    // Next button
-    document.getElementById('nextBtn').addEventListener('click', () => {
-        loadNextQuestion();
-    });
-    
-    // Back button - goes to data page with rotation animation
-    document.getElementById('backToHomeBtn').addEventListener('click', () => {
-        const quizContent = document.getElementById('quizContent');
         
-        if (!quizContent) {
-            window.location.hash = '#/data';
-            return;
+        // Next button
+        const nextBtn = document.getElementById('nextBtn');
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                loadNextQuestion();
+            });
         }
         
-        // Step 1: Rotate 45 degrees slowly (1 second)
-        quizContent.style.transition = 'transform 1s ease-in-out';
-        quizContent.style.transform = 'rotate(45deg)';
-        
-        // Step 2: After 1 second, rotate back at double speed (0.5 seconds)
-        setTimeout(() => {
-            quizContent.style.transition = 'transform 0.5s ease-in-out';
-            quizContent.style.transform = 'rotate(0deg)';
-            
-            // Step 3: After rotation back (0.5s), fade out (0.5s)
-            setTimeout(() => {
-                quizContent.style.transition = 'opacity 0.5s ease-in-out';
-                quizContent.style.opacity = '0';
+        // Back button - goes to data page with rotation animation
+        const backBtn = document.getElementById('backToHomeBtn');
+        if (backBtn) {
+            backBtn.addEventListener('click', () => {
+                const quizContent = document.getElementById('quizContent');
                 
-                // Step 4: After fade out, navigate to data page
-                setTimeout(() => {
+                if (!quizContent) {
                     window.location.hash = '#/data';
-                }, 500);
-            }, 500);
-        }, 1000);
-    });
+                    return;
+                }
+                
+                // Step 1: Rotate 45 degrees slowly (1 second)
+                quizContent.style.transition = 'transform 1s ease-in-out';
+                quizContent.style.transform = 'rotate(45deg)';
+                
+                // Step 2: After 1 second, rotate back at double speed (0.5 seconds)
+                setTimeout(() => {
+                    quizContent.style.transition = 'transform 0.5s ease-in-out';
+                    quizContent.style.transform = 'rotate(0deg)';
+                    
+                    // Step 3: After rotation back (0.5s), fade out (0.5s)
+                    setTimeout(() => {
+                        quizContent.style.transition = 'opacity 0.5s ease-in-out';
+                        quizContent.style.opacity = '0';
+                        
+                        // Step 4: After fade out, navigate to data page
+                        setTimeout(() => {
+                            window.location.hash = '#/data';
+                        }, 500);
+                    }, 500);
+                }, 1000);
+            });
+        }
+        
+        eventListenersAttached = true;
+    }
 }
 
 // Export to global scope
