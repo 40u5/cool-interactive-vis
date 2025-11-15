@@ -148,11 +148,34 @@ let xScale, yScale, g;
 let lastValidTransform = null; // Track last valid zoom transform
 const MIN_LOG_VALUE = 1; // Smallest value allowed on log axes
 const MIN_SLIDER_BUDGET = 100000; // 0.1M minimum for slider filtering
+let originalXDomain = null; // Store original domain bounds for zoom-out limit
+let originalYDomain = null; // Store original domain bounds for zoom-out limit
+const MAX_ZOOM_OUT_MULTIPLIER = 1; // Allow zoom-out up to 1.2x the original domain range
+let maxXDataValue = null; // Store maximum x data value for pan constraint
+let maxYDataValue = null; // Store maximum y data value for pan constraint
+let plotWidth = null; // Store plot width for pan constraint
+let plotHeight = null; // Store plot height for pan constraint
 
 function formatCurrency(value) {
-    if (value >= 1000000) return '$' + (value / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    if (value >= 1000) return '$' + (value / 1000).toFixed(0) + 'K';
-    return '$' + value.toFixed(0);
+    // Format as: 1, 2, 5, 10, 20, 50, 100, ... then 1k, 2k, 5k, ... then 1M, 2M, 5M, etc.
+    // Since getLogTicks generates whole numbers (1, 2, 5 at each power), we can safely assume whole numbers
+    
+    if (value >= 1000000000) {
+        // Billions: 1B, 2B, 5B, 10B, etc.
+        const billions = Math.round(value / 1000000000);
+        return billions + 'B';
+    } else if (value >= 1000000) {
+        // Millions: 1M, 2M, 5M, 10M, 20M, 50M, 100M, etc.
+        const millions = Math.round(value / 1000000);
+        return millions + 'M';
+    } else if (value >= 1000) {
+        // Thousands: 1k, 2k, 5k, 10k, 20k, 50k, 100k, etc.
+        const thousands = Math.round(value / 1000);
+        return thousands + 'k';
+    } else {
+        // Less than 1000: 1, 2, 5, 10, 20, 50, 100, 200, 500
+        return Math.round(value).toString();
+    }
 }
 
 function getLogTicks(domain) {
@@ -239,6 +262,12 @@ function updateScatterPlot(animate = true) {
     const budgetExtent = d3.extent(rawData, d => d.budget);
     const revenueExtent = d3.extent(rawData, d => d.revenue);
     
+    // Store maximum data values for pan constraints
+    maxXDataValue = budgetExtent[1] || MIN_LOG_VALUE * 10;
+    maxYDataValue = revenueExtent[1] || MIN_LOG_VALUE * 10;
+    plotWidth = width;
+    plotHeight = height;
+    
     // Ensure minimum values are at least MIN_LOG_VALUE
     const xExtentMin = budgetExtent[0] || MIN_LOG_VALUE;
     const xExtentMax = budgetExtent[1] || xExtentMin * 10;
@@ -264,6 +293,10 @@ function updateScatterPlot(animate = true) {
         .range([height, 0])
         .nice();
 
+    // Store original domain bounds (after nice()) to limit zoom-out
+    originalXDomain = xScale.domain().slice(); // Create a copy of the domain
+    originalYDomain = yScale.domain().slice(); // Create a copy of the domain
+
     // Add zoom behavior with filter to prevent going below MIN_LOG_VALUE
     zoom = d3.zoom()
         .scaleExtent([0.5, 10])
@@ -282,13 +315,25 @@ function updateScatterPlot(animate = true) {
     // Axes - custom tick values for log scale to avoid clutter
     const xTicks = getLogTicks(xScale.domain());
     const yTicks = getLogTicks(yScale.domain());
+    
+    // Remove the minimum and maximum values from x-axis ticks to reduce clutter at edges
+    const xDomainForTicks = xScale.domain();
+    const xTicksFiltered = xTicks.filter(tick => {
+        return tick !== xDomainForTicks[0] && tick !== xDomainForTicks[1];
+    });
+    
+    // Remove the minimum and maximum values from y-axis ticks to reduce clutter at edges
+    const yDomainForTicks = yScale.domain();
+    const yTicksFiltered = yTicks.filter(tick => {
+        return tick !== yDomainForTicks[0] && tick !== yDomainForTicks[1];
+    });
 
     const xAxis = d3.axisBottom(xScale)
-        .tickValues(xTicks)
+        .tickValues(xTicksFiltered)
         .tickFormat(formatCurrency);
     
     const yAxis = d3.axisLeft(yScale)
-        .tickValues(yTicks)
+        .tickValues(yTicksFiltered)
         .tickFormat(formatCurrency);
 
     // Add axes to background layer
@@ -449,19 +494,86 @@ function zoomed(event) {
         return; // Exit early
     }
     
+    // Limit zoom-out: prevent zooming out beyond the original domain bounds
+    if (originalXDomain && originalYDomain) {
+        // For log scales, calculate range in log space (proper way to measure range for log scales)
+        const originalXLogRange = Math.log10(originalXDomain[1]) - Math.log10(originalXDomain[0]);
+        const originalYLogRange = Math.log10(originalYDomain[1]) - Math.log10(originalYDomain[0]);
+        const currentXLogRange = Math.log10(currentXDomain[1]) - Math.log10(currentXDomain[0]);
+        const currentYLogRange = Math.log10(currentYDomain[1]) - Math.log10(currentYDomain[0]);
+        
+        // Check if zoomed out too far (range is larger than original range * multiplier)
+        const maxXLogRange = originalXLogRange * MAX_ZOOM_OUT_MULTIPLIER;
+        const maxYLogRange = originalYLogRange * MAX_ZOOM_OUT_MULTIPLIER;
+        
+        if (currentXLogRange > maxXLogRange || currentYLogRange > maxYLogRange) {
+            // Reject this transform - reset to last valid transform
+            const svg = d3.select('#scatterPlot');
+            if (lastValidTransform) {
+                svg.call(zoom.transform, lastValidTransform);
+            } else {
+                svg.call(zoom.transform, d3.zoomIdentity);
+            }
+            return; // Exit early
+        }
+    }
+    
+    // Limit panning: prevent panning beyond data boundaries
+    // X-axis: prevent panning left when max x data value would go beyond left edge (x = 0)
+    // Y-axis: prevent panning down when max y data value would go beyond bottom edge
+    //   For inverted y-axis (range [height, 0]): bottom is at y = height
+    //   When domain min increases (panning down), maxYDataValue maps to larger y positions
+    //   When domain min reaches maxYDataValue, maxYPosition = height (max value at bottom edge)
+    //   Further panning would make maxYPosition > height (max value below bottom, should prevent)
+    if (maxXDataValue !== null && maxYDataValue !== null && plotWidth !== null && plotHeight !== null) {
+        const maxXPosition = newXScale(maxXDataValue);
+        const maxYPosition = newYScale(maxYDataValue);
+        
+        // X-axis: prevent panning when max x value would be beyond left edge
+        const xViolated = maxXPosition < 0;
+        
+        // Y-axis: prevent panning when max y value would be below bottom edge
+        // maxYPosition > plotHeight means max value is below bottom (not visible, should prevent)
+        const yViolated = maxYPosition > plotHeight;
+        
+        if (xViolated || yViolated) {
+            // Reject this transform - reset to last valid transform
+            // This prevents panning beyond the point where max values reach the edges
+            const svg = d3.select('#scatterPlot');
+            if (lastValidTransform) {
+                svg.call(zoom.transform, lastValidTransform);
+            } else {
+                svg.call(zoom.transform, d3.zoomIdentity);
+            }
+            return; // Exit early
+        }
+    }
+    
     // This transform is valid - save it
     lastValidTransform = transform;
     
     // Update axes - use same formatting as initial axes
     const xTicks = getLogTicks(newXScale.domain());
     const yTicks = getLogTicks(newYScale.domain());
+    
+    // Remove the minimum and maximum values from x-axis ticks to reduce clutter at edges
+    const newXDomainForTicks = newXScale.domain();
+    const xTicksFiltered = xTicks.filter(tick => {
+        return tick !== newXDomainForTicks[0] && tick !== newXDomainForTicks[1];
+    });
+    
+    // Remove the minimum and maximum values from y-axis ticks to reduce clutter at edges
+    const newYDomainForTicks = newYScale.domain();
+    const yTicksFiltered = yTicks.filter(tick => {
+        return tick !== newYDomainForTicks[0] && tick !== newYDomainForTicks[1];
+    });
 
     g.select('.x-axis').call(d3.axisBottom(newXScale)
-        .tickValues(xTicks)
+        .tickValues(xTicksFiltered)
         .tickFormat(formatCurrency));
     
     g.select('.y-axis').call(d3.axisLeft(newYScale)
-        .tickValues(yTicks)
+        .tickValues(yTicksFiltered)
         .tickFormat(formatCurrency));
     
     // Update dots
