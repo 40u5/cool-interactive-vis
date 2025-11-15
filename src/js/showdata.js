@@ -7,6 +7,111 @@ let isAnimating = false;
 // Global color scale for genres - will be initialized dynamically
 let colorScale;
 
+// Language code to full name mapping (ISO 639-1)
+const languageNames = {
+    'ab': 'Abkhazian',
+    'af': 'Afrikaans',
+    'am': 'Amharic',
+    'ar': 'Arabic',
+    'ay': 'Aymara',
+    'bg': 'Bulgarian',
+    'bm': 'Bambara',
+    'bn': 'Bengali',
+    'bo': 'Tibetan',
+    'bs': 'Bosnian',
+    'ca': 'Catalan',
+    'cn': 'Cantonese',
+    'cs': 'Czech',
+    'cy': 'Welsh',
+    'da': 'Danish',
+    'de': 'German',
+    'el': 'Greek',
+    'en': 'English',
+    'eo': 'Esperanto',
+    'es': 'Spanish',
+    'et': 'Estonian',
+    'eu': 'Basque',
+    'fa': 'Persian',
+    'fi': 'Finnish',
+    'fr': 'French',
+    'fy': 'Western Frisian',
+    'gl': 'Galician',
+    'he': 'Hebrew',
+    'hi': 'Hindi',
+    'hr': 'Croatian',
+    'hu': 'Hungarian',
+    'hy': 'Armenian',
+    'id': 'Indonesian',
+    'is': 'Icelandic',
+    'it': 'Italian',
+    'iu': 'Inuktitut',
+    'ja': 'Japanese',
+    'jv': 'Javanese',
+    'ka': 'Georgian',
+    'kk': 'Kazakh',
+    'kn': 'Kannada',
+    'ko': 'Korean',
+    'ku': 'Kurdish',
+    'ky': 'Kyrgyz',
+    'la': 'Latin',
+    'lb': 'Luxembourgish',
+    'lo': 'Lao',
+    'lt': 'Lithuanian',
+    'lv': 'Latvian',
+    'mk': 'Macedonian',
+    'ml': 'Malayalam',
+    'mn': 'Mongolian',
+    'mr': 'Marathi',
+    'ms': 'Malay',
+    'mt': 'Maltese',
+    'nb': 'Norwegian Bokmål',
+    'ne': 'Nepali',
+    'nl': 'Dutch',
+    'no': 'Norwegian',
+    'pa': 'Punjabi',
+    'pl': 'Polish',
+    'ps': 'Pashto',
+    'pt': 'Portuguese',
+    'qu': 'Quechua',
+    'ro': 'Romanian',
+    'ru': 'Russian',
+    'rw': 'Kinyarwanda',
+    'sh': 'Serbo-Croatian',
+    'si': 'Sinhala',
+    'sk': 'Slovak',
+    'sl': 'Slovenian',
+    'sm': 'Samoan',
+    'sq': 'Albanian',
+    'sr': 'Serbian',
+    'sv': 'Swedish',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'tg': 'Tajik',
+    'th': 'Thai',
+    'tl': 'Tagalog',
+    'tr': 'Turkish',
+    'uk': 'Ukrainian',
+    'ur': 'Urdu',
+    'uz': 'Uzbek',
+    'vi': 'Vietnamese',
+    'wo': 'Wolof',
+    'xx': 'No Language',
+    'zh': 'Chinese',
+    'zu': 'Zulu'
+};
+
+/**
+ * Get full language name from ISO 639-1 code
+ * @param {string} code - ISO 639-1 language code
+ * @returns {string} Full language name or the code if not found
+ */
+function getLanguageName(code) {
+    if (!code || code === 'Unknown') return 'Unknown';
+    // Handle numeric values that might appear in the data
+    if (!isNaN(code)) return code;
+    return languageNames[code.toLowerCase()] || code.toUpperCase();
+}
+
 // Default color palette for genres
 const genreColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5', '#ff9896', '#c5b0d5'];
 
@@ -160,10 +265,15 @@ function processData(data) {
     // Populate language filter
     const languageFilter = document.getElementById('languageFilter');
     languageFilter.innerHTML = '<option value="all">All Languages</option>';
-    Array.from(languageSet).sort().forEach(l => {
+    // Sort languages by full name for better UX
+    Array.from(languageSet).sort((a, b) => {
+        const nameA = getLanguageName(a);
+        const nameB = getLanguageName(b);
+        return nameA.localeCompare(nameB);
+    }).forEach(l => {
         const option = document.createElement('option');
-        option.value = l;
-        option.textContent = l;
+        option.value = l; // Keep the code as the value for filtering
+        option.textContent = getLanguageName(l); // Display full name
         languageFilter.appendChild(option);
     });
 
@@ -367,14 +477,12 @@ function updateVisualizations(animate = true) {
         return genreMatch && languageMatch && budgetMatch && dateMatch;
     });
 
-    if (filteredData.length === 0) {
-        return;
-    }
+    console.log('Filtered data:', filteredData.length, 'movies');
     
     // Update sample size slider max value based on filtered data
     const sampleSlider = document.getElementById('sampleSize');
     const sampleValue = document.getElementById('sampleSizeValue');
-    if (sampleSlider && sampleValue) {
+    if (sampleSlider && sampleValue && filteredData.length > 0) {
         const currentSample = parseInt(sampleSlider.value);
         sampleSlider.max = filteredData.length;
         
@@ -397,7 +505,7 @@ function updateVisualizations(animate = true) {
         }
     }
 
-    // Update all visualizations with animation
+    // Update all visualizations with animation (even if no data)
     updateScatterPlot(animate);
     updateGenreChart(animate);
     updateProfitChart(animate);
@@ -420,7 +528,11 @@ function formatCurrency(value) {
     // Format as: 1, 2, 5, 10, 20, 50, 100, ... then 1k, 2k, 5k, ... then 1M, 2M, 5M, etc.
     // Since getLogTicks generates whole numbers (1, 2, 5 at each power), we can safely assume whole numbers
     
-    if (value >= 1000000000) {
+    if (value >= 1000000000000) {
+        // Trillions: 1T, 2T, 5T, 10T, etc.
+        const trillions = Math.round(value / 1000000000000);
+        return trillions + 'T';
+    } else if (value >= 1000000000) {
         // Billions: 1B, 2B, 5B, 10B, etc.
         const billions = Math.round(value / 1000000000);
         return billions + 'B';
@@ -522,9 +634,11 @@ function updateScatterPlot(animate = true) {
     const budgetExtent = d3.extent(rawData, d => d.budget);
     const revenueExtent = d3.extent(rawData, d => d.revenue);
     
-    // Store maximum data values for pan constraints
-    maxXDataValue = budgetExtent[1] || MIN_LOG_VALUE * 10;
-    maxYDataValue = revenueExtent[1] || MIN_LOG_VALUE * 10;
+    // Store maximum data values for pan constraints - use filteredData so constraints apply to visible data
+    const filteredBudgetExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.budget) : budgetExtent;
+    const filteredRevenueExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.revenue) : revenueExtent;
+    maxXDataValue = filteredBudgetExtent[1] || budgetExtent[1] || MIN_LOG_VALUE * 10;
+    maxYDataValue = filteredRevenueExtent[1] || revenueExtent[1] || MIN_LOG_VALUE * 10;
     plotWidth = width;
     plotHeight = height;
     
@@ -654,6 +768,53 @@ function updateScatterPlot(animate = true) {
     // Tooltip
     const tooltip = d3.select('#tooltip');
 
+    // Check if there's no data to display
+    if (filteredData.length === 0) {
+        // Remove any existing "no data" message
+        foregroundLayer.selectAll('.no-data-message').remove();
+        
+        // Display "No data" message in the center of the plot
+        foregroundLayer.append('text')
+            .attr('class', 'no-data-message')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '24px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available for selected filters')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        
+        // Clear any existing dots
+        foregroundLayer.selectAll('.dot').remove();
+        
+        // Update stats box to show no data
+        const statsBox = document.getElementById('statsBox');
+        if (statsBox) {
+            statsBox.innerHTML = 
+                `<div class="stat">
+                    <div>Average ROI</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Avg Budget</div>
+                    <div class="stat-value">N/A</div>
+                </div>
+                <div class="stat">
+                    <div>Success Rate</div>
+                    <div class="stat-value">N/A</div>
+                </div>`;
+        }
+        return;
+    }
+
+    // Remove any existing "no data" message
+    foregroundLayer.selectAll('.no-data-message').remove();
+
     // Dots container in foreground layer (renders on top)
     const dotsContainer = foregroundLayer.append('g').attr('class', 'dots-container');
 
@@ -705,7 +866,7 @@ function updateScatterPlot(animate = true) {
                 ROI: ${d.roi.toFixed(1)}%<br/>
                 Profit: $${(d.profit / 1000000).toFixed(1)}M<br/>
                 ${releaseDateInfo}Genres: ${d.genres}<br/>
-                Language: ${d.language}<br/>
+                Language: ${getLanguageName(d.language)}<br/>
                 Runtime: ${d.runtime} min`);
             
             tooltip.style('left', (event.pageX + 10) + 'px')
@@ -779,27 +940,26 @@ function zoomed(event) {
         }
     }
     
-    // Limit panning: prevent panning beyond data boundaries
-    // X-axis: prevent panning left when max x data value would go beyond left edge (x = 0)
-    // Y-axis: prevent panning down when max y data value would go beyond bottom edge
-    //   For inverted y-axis (range [height, 0]): bottom is at y = height
+    // Limit panning: prevent panning beyond center for max values
+    // X-axis: prevent panning left when max x data value would go beyond center (x = width/2)
+    // Y-axis: prevent panning down when max y data value would go beyond center (y = height/2)
+    //   For inverted y-axis (range [height, 0]): center is at y = height/2
     //   When domain min increases (panning down), maxYDataValue maps to larger y positions
-    //   When domain min reaches maxYDataValue, maxYPosition = height (max value at bottom edge)
-    //   Further panning would make maxYPosition > height (max value below bottom, should prevent)
+    //   We want to prevent maxYPosition from going below the center (height/2)
     if (maxXDataValue !== null && maxYDataValue !== null && plotWidth !== null && plotHeight !== null) {
         const maxXPosition = newXScale(maxXDataValue);
         const maxYPosition = newYScale(maxYDataValue);
         
-        // X-axis: prevent panning when max x value would be beyond left edge
-        const xViolated = maxXPosition < 0;
+        // X-axis: prevent panning when max x value would be beyond center (to the left)
+        const xViolated = maxXPosition < plotWidth / 2;
         
-        // Y-axis: prevent panning when max y value would be below bottom edge
-        // maxYPosition > plotHeight means max value is below bottom (not visible, should prevent)
-        const yViolated = maxYPosition > plotHeight;
+        // Y-axis: prevent panning when max y value would be below center (toward bottom)
+        // maxYPosition > plotHeight/2 means max value is below center, should prevent
+        const yViolated = maxYPosition > plotHeight / 2;
         
         if (xViolated || yViolated) {
             // Reject this transform - reset to last valid transform
-            // This prevents panning beyond the point where max values reach the edges
+            // This prevents panning beyond the point where max values reach the center
             const svg = d3.select('#scatterPlot');
             if (lastValidTransform) {
                 svg.call(zoom.transform, lastValidTransform);
@@ -897,12 +1057,45 @@ function updateGenreChart(animate = true) {
         d => d.mainGenre
     );
 
-    const data = Array.from(genreData, ([genre, stats]) => ({
-        genre: genre,
-        avgROI: stats.avgROI,
-        count: stats.count,
-        avgProfit: stats.avgProfit
-    })).sort((a, b) => b.avgROI - a.avgROI).slice(0, 10);
+    // Filter out genres with invalid avgROI and ensure valid numeric values
+    const data = Array.from(genreData, ([genre, stats]) => {
+        // Only include genres with valid avgROI values
+        const avgROI = stats.avgROI != null && !isNaN(stats.avgROI) ? stats.avgROI : null;
+        const avgProfit = stats.avgProfit != null && !isNaN(stats.avgProfit) ? stats.avgProfit : 0;
+        
+        // Return null for genres with invalid ROI to filter them out
+        if (avgROI === null || stats.count === 0) {
+            return null;
+        }
+        
+        return {
+            genre: genre,
+            avgROI: avgROI,
+            count: stats.count,
+            avgProfit: avgProfit
+        };
+    })
+    .filter(d => d !== null) // Remove genres with invalid ROI
+    .sort((a, b) => b.avgROI - a.avgROI) // Sort by ROI (descending)
+    .slice(0, 10);
+
+    // Check if there's no data
+    if (data.length === 0 || filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
 
     // Scales
     const xScale = d3.scaleBand()
@@ -912,10 +1105,36 @@ function updateGenreChart(animate = true) {
 
     // Adjust x-axis position to move it up a bit, leaving more room for rotated labels
     const xAxisYPosition = height - 15; // Move axis up by 15px to give more space below
-
+    
+    // Calculate domain with proper handling of valid numeric values
+    const validROIs = data.map(d => d.avgROI).filter(roi => roi != null && !isNaN(roi));
+    const minROI = validROIs.length > 0 ? d3.min(validROIs) : 0;
+    const maxROI = validROIs.length > 0 ? d3.max(validROIs) : 0;
+    
+    // Ensure domain includes 0 if there are negative values, or if all values are zero
+    // This ensures the zero line is visible when needed
+    let yDomainMin, yDomainMax;
+    if (minROI < 0) {
+        // Has negative values: domain should include min and 0 (or max if max > 0)
+        yDomainMin = minROI;
+        yDomainMax = Math.max(0, maxROI);
+    } else if (maxROI > 0) {
+        // All positive: domain from 0 to max
+        yDomainMin = 0;
+        yDomainMax = maxROI;
+    } else {
+        // All zero or no valid data: use [0, 1] as fallback
+        yDomainMin = 0;
+        yDomainMax = 1;
+    }
+    
+    // Ensure domain has a valid range (min < max)
+    if (yDomainMin >= yDomainMax) {
+        yDomainMax = yDomainMin + 1;
+    }
+    
     const yScale = d3.scaleLinear()
-        .domain([d3.min(data, d => d.avgROI) < 0 ? d3.min(data, d => d.avgROI) : 0, 
-                d3.max(data, d => d.avgROI)])
+        .domain([yDomainMin, yDomainMax])
         .range([xAxisYPosition, 0]) // Use the adjusted x-axis position for proper alignment
         .nice();
 
@@ -950,15 +1169,23 @@ function updateGenreChart(animate = true) {
         .attr('text-anchor', 'middle')
         .text('Average ROI (%)');
 
-    // Zero line if needed
-    if (d3.min(data, d => d.avgROI) < 0) {
-        g.append('line')
+    // Zero line: show if 0 is within the domain (which it always is based on our domain calculation)
+    // Always show zero line when domain includes 0, which helps visualize ROI above/below break-even
+    const hasNegativeROI = validROIs.some(roi => roi < 0);
+    if (yDomainMin <= 0 && yDomainMax >= 0) {
+        const zeroYPos = yScale(0);
+        const zeroLine = g.append('line')
             .attr('x1', 0)
-            .attr('y1', yScale(0))
+            .attr('y1', zeroYPos)
             .attr('x2', width)
-            .attr('y2', yScale(0))
+            .attr('y2', zeroYPos)
             .attr('stroke', '#333')
             .attr('stroke-width', 1);
+        
+        // Make zero line solid if there are negative values, dashed otherwise
+        if (!hasNegativeROI) {
+            zeroLine.attr('stroke-dasharray', '3,3').attr('opacity', 0.5);
+        }
     }
 
     const tooltip = d3.select('#tooltip');
@@ -967,34 +1194,59 @@ function updateGenreChart(animate = true) {
     const bars = g.selectAll('.bar')
         .data(data);
 
+    // Calculate zero line position on the y-axis
+    const zeroY = yScale(0);
+    
     const barsEnter = bars.enter()
         .append('rect')
         .attr('class', 'bar')
         .attr('x', d => xScale(d.genre))
-        .attr('y', d => d.avgROI >= 0 ? xAxisYPosition : yScale(d.avgROI))
         .attr('width', xScale.bandwidth())
-        .attr('height', 0)
         .attr('fill', d => colorScale(d.genre));
 
+    // Set initial positions for animation
     if (animate) {
-        barsEnter.transition()
+        barsEnter
+            .attr('y', d => {
+                // Start from zero line
+                return zeroY;
+            })
+            .attr('height', 0)
+            .transition()
             .duration(800)
             .delay((d, i) => i * 50)
-            .attr('y', d => d.avgROI >= 0 ? yScale(d.avgROI) : yScale(0))
-            .attr('height', d => Math.abs(yScale(d.avgROI) - yScale(0)));
+            .attr('y', d => {
+                // For positive ROI: bar extends upward from zero line
+                // For negative ROI: bar extends downward from zero line
+                const roi = d.avgROI != null && !isNaN(d.avgROI) ? d.avgROI : 0;
+                return roi >= 0 ? yScale(roi) : zeroY;
+            })
+            .attr('height', d => {
+                const roi = d.avgROI != null && !isNaN(d.avgROI) ? d.avgROI : 0;
+                return Math.abs(yScale(roi) - zeroY);
+            });
     } else {
         barsEnter
-            .attr('y', d => d.avgROI >= 0 ? yScale(d.avgROI) : yScale(0))
-            .attr('height', d => Math.abs(yScale(d.avgROI) - yScale(0)));
+            .attr('y', d => {
+                const roi = d.avgROI != null && !isNaN(d.avgROI) ? d.avgROI : 0;
+                return roi >= 0 ? yScale(roi) : zeroY;
+            })
+            .attr('height', d => {
+                const roi = d.avgROI != null && !isNaN(d.avgROI) ? d.avgROI : 0;
+                return Math.abs(yScale(roi) - zeroY);
+            });
     }
 
     // Add interactions
     barsEnter
         .on('mouseover', function(event, d) {
             tooltip.style('opacity', '1');
+            // Safely format ROI and profit values
+            const roi = d.avgROI != null && !isNaN(d.avgROI) ? d.avgROI.toFixed(1) : 'N/A';
+            const profit = d.avgProfit != null && !isNaN(d.avgProfit) ? (d.avgProfit / 1000000).toFixed(1) : 'N/A';
             tooltip.html(`<strong>${d.genre}</strong><br/>
-                Avg ROI: ${d.avgROI.toFixed(1)}%<br/>
-                Avg Profit: $${(d.avgProfit / 1000000).toFixed(1)}M<br/>
+                Avg ROI: ${roi}%<br/>
+                Avg Profit: $${profit}M<br/>
                 Movies: ${d.count}`);
             tooltip.style('left', (event.pageX + 10) + 'px')
                    .style('top', (event.pageY - 10) + 'px');
@@ -1070,6 +1322,24 @@ function updateProfitChart(animate = true) {
 
     const g = svg.append('g')
         .attr('transform', `translate(${containerPadding.left + margin.left},${containerPadding.top + margin.top})`);
+
+    // Check if there's no data
+    if (filteredData.length === 0) {
+        g.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('dominant-baseline', 'middle')
+            .style('font-size', '18px')
+            .style('font-weight', 'bold')
+            .style('fill', '#95a5a6')
+            .style('opacity', 0)
+            .text('No data available')
+            .transition()
+            .duration(animate ? 500 : 0)
+            .style('opacity', 1);
+        return;
+    }
 
     // Calculate profit distribution
     const profitable = filteredData.filter(d => d.profit > 0).length;
@@ -1171,20 +1441,42 @@ function updateProfitChart(animate = true) {
     const avgROI = d3.mean(filteredData, d => d.roi);
     const avgBudget = d3.mean(filteredData, d => d.budget);
     const avgRevenue = d3.mean(filteredData, d => d.revenue);
-    const successRate = (profitable / filteredData.length) * 100;
+    const successRate = filteredData.length > 0 ? (profitable / filteredData.length) * 100 : 0;
+
+    // Safely format values, handling NaN and undefined
+    const formatROI = (roi) => {
+        if (roi != null && !isNaN(roi)) {
+            return roi.toFixed(1) + '%';
+        }
+        return 'N/A';
+    };
+    
+    const formatBudget = (budget) => {
+        if (budget != null && !isNaN(budget)) {
+            return '$' + (budget / 1000000).toFixed(1) + 'M';
+        }
+        return 'N/A';
+    };
+    
+    const formatRate = (rate) => {
+        if (rate != null && !isNaN(rate)) {
+            return rate.toFixed(1) + '%';
+        }
+        return 'N/A';
+    };
 
     document.getElementById('statsBox').innerHTML = 
         `<div class="stat">
             <div>Average ROI</div>
-            <div class="stat-value">${avgROI.toFixed(1)}%</div>
+            <div class="stat-value">${formatROI(avgROI)}</div>
         </div>
         <div class="stat">
             <div>Avg Budget</div>
-            <div class="stat-value">$${(avgBudget / 1000000).toFixed(1)}M</div>
+            <div class="stat-value">${formatBudget(avgBudget)}</div>
         </div>
         <div class="stat">
             <div>Success Rate</div>
-            <div class="stat-value">${successRate.toFixed(1)}%</div>
+            <div class="stat-value">${formatRate(successRate)}</div>
         </div>`;
 }
 
