@@ -77,24 +77,45 @@ function skipAnimation() {
 }
 
 function showDataVisualization() {
+    // Navigate to /data
+    window.history.pushState({}, '', '/data');
+    updateView();
+}
+
+function updateView() {
+    const path = window.location.pathname;
     const frontpage = document.getElementById('frontpage');
     const dataViz = document.getElementById('dataVisualization');
     
-    if (frontpage) {
-        frontpage.style.display = 'none';
-    }
-    
-    if (dataViz) {
-        dataViz.style.display = 'block';
-        // Wait a moment for layout, then load data
-        setTimeout(() => {
-            if (window.autoLoadData) {
-                window.autoLoadData();
+    if (path === '/data') {
+        // Show data page
+        if (frontpage) frontpage.style.display = 'none';
+        if (dataViz) {
+            dataViz.style.display = 'block';
+            setTimeout(() => {
+                if (window.autoLoadData) window.autoLoadData();
+            }, 100);
+        }
+    } else {
+        // Show main page
+        if (dataViz) dataViz.style.display = 'none';
+        if (frontpage) {
+            frontpage.style.display = 'flex';
+            if (!frontpage.querySelector('.button-container.show')) {
+                startAnimation();
             }
-        }, 100);
+        }
     }
 }
 
+// Handle browser back/forward
+window.addEventListener('popstate', updateView);
+
 // Initialize on page load
-window.addEventListener('DOMContentLoaded', initializeFrontpage);
+window.addEventListener('DOMContentLoaded', () => {
+    updateView();
+    if (window.location.pathname === '/' || window.location.pathname === '') {
+        initializeFrontpage();
+    }
+});
 
