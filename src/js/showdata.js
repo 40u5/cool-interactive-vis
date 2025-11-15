@@ -476,9 +476,11 @@ function updateScatterPlot(animate = true) {
     const budgetExtent = d3.extent(rawData, d => d.budget);
     const revenueExtent = d3.extent(rawData, d => d.revenue);
     
-    // Store maximum data values for pan constraints
-    maxXDataValue = budgetExtent[1] || MIN_LOG_VALUE * 10;
-    maxYDataValue = revenueExtent[1] || MIN_LOG_VALUE * 10;
+    // Store maximum data values for pan constraints - use filteredData so constraints apply to visible data
+    const filteredBudgetExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.budget) : budgetExtent;
+    const filteredRevenueExtent = filteredData.length > 0 ? d3.extent(filteredData, d => d.revenue) : revenueExtent;
+    maxXDataValue = filteredBudgetExtent[1] || budgetExtent[1] || MIN_LOG_VALUE * 10;
+    maxYDataValue = filteredRevenueExtent[1] || revenueExtent[1] || MIN_LOG_VALUE * 10;
     plotWidth = width;
     plotHeight = height;
     
@@ -779,27 +781,26 @@ function zoomed(event) {
         }
     }
     
-    // Limit panning: prevent panning beyond data boundaries
-    // X-axis: prevent panning left when max x data value would go beyond left edge (x = 0)
-    // Y-axis: prevent panning down when max y data value would go beyond bottom edge
-    //   For inverted y-axis (range [height, 0]): bottom is at y = height
+    // Limit panning: prevent panning beyond center for max values
+    // X-axis: prevent panning left when max x data value would go beyond center (x = width/2)
+    // Y-axis: prevent panning down when max y data value would go beyond center (y = height/2)
+    //   For inverted y-axis (range [height, 0]): center is at y = height/2
     //   When domain min increases (panning down), maxYDataValue maps to larger y positions
-    //   When domain min reaches maxYDataValue, maxYPosition = height (max value at bottom edge)
-    //   Further panning would make maxYPosition > height (max value below bottom, should prevent)
+    //   We want to prevent maxYPosition from going below the center (height/2)
     if (maxXDataValue !== null && maxYDataValue !== null && plotWidth !== null && plotHeight !== null) {
         const maxXPosition = newXScale(maxXDataValue);
         const maxYPosition = newYScale(maxYDataValue);
         
-        // X-axis: prevent panning when max x value would be beyond left edge
-        const xViolated = maxXPosition < 0;
+        // X-axis: prevent panning when max x value would be beyond center (to the left)
+        const xViolated = maxXPosition < plotWidth / 2;
         
-        // Y-axis: prevent panning when max y value would be below bottom edge
-        // maxYPosition > plotHeight means max value is below bottom (not visible, should prevent)
-        const yViolated = maxYPosition > plotHeight;
+        // Y-axis: prevent panning when max y value would be below center (toward bottom)
+        // maxYPosition > plotHeight/2 means max value is below center, should prevent
+        const yViolated = maxYPosition > plotHeight / 2;
         
         if (xViolated || yViolated) {
             // Reject this transform - reset to last valid transform
-            // This prevents panning beyond the point where max values reach the edges
+            // This prevents panning beyond the point where max values reach the center
             const svg = d3.select('#scatterPlot');
             if (lastValidTransform) {
                 svg.call(zoom.transform, lastValidTransform);
